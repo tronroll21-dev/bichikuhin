@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ログイン - 備蓄品管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-lg shadow-md w-96" x-data="loginForm()">
+        <h2 class="text-2xl font-bold mb-6 text-center">システムログイン</h2>
+        
+        <template x-if="error">
+            <div class="bg-red-100 text-red-700 p-2 mb-4 rounded text-sm" x-text="error"></div>
+        </template>
+
+        <form @submit.prevent="submit">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">ユーザー名</label>
+                <input type="text" x-model="username" class="w-full border p-2 rounded" required>
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-1">パスワード</label>
+                <input type="password" x-model="password" class="w-full border p-2 rounded" required>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 transition">
+                ログイン
+            </button>
+        </form>
+    </div>
+
+    <script>
+        function loginForm() {
+            return {
+                username: '',
+                password: '',
+                error: '',
+                async submit() {
+                    this.error = '';
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: this.username, password: this.password })
+                    });
+                    
+                    if (res.ok) {
+                        window.location.href = '/';
+                    } else {
+                        const data = await res.json();
+                        this.error = data.message || 'ログインに失敗しました';
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

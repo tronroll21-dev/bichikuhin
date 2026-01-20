@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>備蓄品管理システム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100" x-data="stockManager()">
+
+    <nav class="bg-white shadow-md">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between">
+                <div class="flex space-x-4">
+                    <div>
+                        <a href="/" class="flex items-center py-5 px-2 text-gray-700 hover:text-gray-900">
+                            <span class="font-bold">備蓄品一覧表</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <div x-data="{ showMenu: false }" class="relative">
+                        <button @click="showMenu = !showMenu" class="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full">
+                            <span x-text="user.name.charAt(0).toUpperCase()"></span>
+                        </button>
+                        <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 py-2 w-48 bg-white rounded-md shadow-xl z-20">
+                            <a href="#" @click.prevent="logout()" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">ログアウト</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto p-8">
+        
+        <div class="bg-white p-4 rounded shadow mb-6">
+            <div class="grid grid-cols-6 gap-4">
+                <select x-model="form.bichikuhinId" class="border p-2 rounded">
+                    <option value="">備蓄品を選択</option>
+                    <template x-for="item in masters.items">
+                        <option :value="item.id" x-text="item.name"></option>
+                    </template>
+                </select>
+                <select x-model="form.locationId" class="border p-2 rounded">
+                    <option value="">保管場所を選択</option>
+                    <template x-for="loc in masters.locations">
+                        <option :value="loc.id" x-text="loc.name"></option>
+                    </template>
+                </select>
+                <input type="number" x-model="form.quantity" placeholder="数量" class="border p-2 rounded">
+                <select x-model="form.unitId" class="border p-2 rounded">
+                    <option value="">単位を選択</option>
+                    <template x-for="unit in masters.units">
+                        <option :value="unit.id" x-text="unit.name"></option>
+                    </template>
+                </select>
+                <input type="date" x-model="form.expiryDate" class="border p-2 rounded">
+                <button @click="saveRecord()" class="bg-blue-600 text-white px-4 py-2 rounded">保存</button>
+            </div>
+        </div>
+
+        <table class="w-full bg-white rounded shadow">
+            <thead>
+                <tr class="bg-gray-200 text-left">
+                    <th class="p-3">登録日時</th>
+                    <th class="p-3">品名</th>
+                    <th class="p-3">場所</th>
+                    <th class="p-3">数量</th>
+                    <th class="p-3">消費期限</th>
+                    <th class="p-3">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="record in records" :key="record.id">
+                    <tr class="border-t">
+                        <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td>
+                        <td class="p-3" x-text="record.Bichikuhin?.name"></td>
+                        <td class="p-3" x-text="record.StorageLocation?.name"></td>
+                        <td class="p-3" x-text="`${record.quantity} ${record.Unit?.name}`"></td>
+                        <td class="p-3" x-text="record.expiry_date"></td>
+                        <td class="p-3">
+                            <button @click="editRecord(record)" class="text-blue-500 underline">編集</button>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function stockManager() {
+            return {
+                records: [],
+                masters: { items: [], locations: [], units: [] },
+                form: { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', unitId: '' },
+                user: { name: '' },
+                showMenu: false,
+
+                async init() {
+                    await this.fetchUser();
+                    await this.fetchData();
+                    await this.fetchMasters();
+                },
+
+                // 認証エラー時にリフレッシュを試みるラッパー
+                async apiFetch(url, options = {}) {
+                    let response = await fetch(url, options);
+                    
+                    if (response.status === 401) {
+                        // JWT期限切れの場合、リフレッシュを試行
+                        const refreshRes = await fetch('/api/refresh', { method: 'POST' });
+                        if (refreshRes.ok) {
+                            return fetch(url, options); // 再試行
+                        } else {
+                            window.location.href = '/login';
+                        }
+                    }
+                    return response;
+                },
+
+                async fetchUser() {
+                    const res = await this.apiFetch('/api/user');
+                    this.user = await res.json();
+                },
+
+                async fetchData() {
+                    const res = await this.apiFetch('/api/records');
+                    this.records = await res.json();
+                },
+
+                async fetchMasters() {
+                    const res = await this.apiFetch('/api/masters');
+                    const data = await res.json();
+                    this.masters.items = data.items;
+                    this.masters.locations = data.locations;
+                    this.masters.units = data.units;
+                },
+
+                async saveRecord() {
+                    const method = this.form.id ? 'PUT' : 'POST';
+                    await this.apiFetch('/api/records', {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.form)
+                    });
+                    this.resetForm();
+                    this.fetchData();
+                },
+
+                async logout() {
+                    await fetch('/api/logout', { method: 'POST' });
+                    window.location.href = '/login';
+                },
+
+                formatDate(dateStr) {
+                    return new Date(dateStr).toLocaleString('ja-JP');
+                },
+
+                resetForm() {
+                    this.form = { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', unitId: '' };
+                },
+
+                editRecord(record) {
+                    this.form.id = record.id;
+                    this.form.bichikuhinId = record.BichikuhinId;
+                    this.form.locationId = record.StorageLocationId;
+                    this.form.quantity = record.quantity;
+                    this.form.expiryDate = record.expiry_date;
+                    this.form.unitId = record.UnitId;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
