@@ -1,10 +1,10 @@
-require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const path = require('path');
+const { Op } = require('sequelize');
 const { sequelize, User, StorageLocation, Bichikuhin, StockRecord, Unit } = require('./models');
+const path = require('path');
 
 const app = express();
 
@@ -102,10 +102,9 @@ app.get('/api/records', authenticateToken, async (req, res) => {
 
 // 6. マスターデータ取得（フロントエンドのセレクトボックス用）
 app.get('/api/masters', authenticateToken, async (req, res) => {
-    const items = await Bichikuhin.findAll();
     const locations = await StorageLocation.findAll();
     const units = await Unit.findAll();
-    res.json({ items, locations, units });
+    res.json({ locations, units });
 });
 
 // 7. 新規登録/更新API
@@ -129,6 +128,40 @@ app.post('/api/records', authenticateToken, async (req, res) => {
             });
         }
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 8. 備蓄品検索API
+app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
+    const { name } = req.query;
+    if (!name) {
+        return res.json([]);
+    }
+    try {
+        const items = await Bichikuhin.findAll({
+            where: {
+                name: {
+                    [Op.like]: `%${name}%`
+                }
+            }
+        });
+        res.json(items);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 9. 備蓄品登録API
+app.post('/api/bichikuhin', authenticateToken, async (req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: 'Name is required' });
+    }
+    try {
+        const newItem = await Bichikuhin.create({ name });
+        res.status(201).json(newItem);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
