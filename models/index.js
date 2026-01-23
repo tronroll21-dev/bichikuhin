@@ -25,6 +25,7 @@ const sequelize = new Sequelize(
 const User = sequelize.define('User', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING, allowNull: false, unique: true },
+    name_jp: { type: DataTypes.STRING, allowNull: true },
     role: { type: DataTypes.STRING },
     password: { type: DataTypes.STRING, allowNull: false }
 });
@@ -76,6 +77,18 @@ StockRecord.belongsTo(StorageLocation);
 Unit.hasMany(StockRecord, { foreignKey: 'UnitId' });
 StockRecord.belongsTo(Unit);
 
+// 棚卸テーブル
+const Stocktaking = sequelize.define('Stocktaking', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.STRING, allowNull: false },
+    date: { type: DataTypes.DATEONLY, allowNull: false },
+    active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }
+});
+
+// 棚卸テーブルとの紐付け
+Stocktaking.hasMany(StockRecord, { foreignKey: 'StocktakingId' });
+StockRecord.belongsTo(Stocktaking);
+
 
 // データベース接続とモデルをエクスポート
 module.exports = {
@@ -84,5 +97,6 @@ module.exports = {
     StorageLocation,
     Bichikuhin,
     StockRecord,
-    Unit
+    Unit,
+    Stocktaking
 };

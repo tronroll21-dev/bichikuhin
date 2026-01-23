@@ -3,7 +3,7 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { sequelize, User, StorageLocation, Bichikuhin, StockRecord, Unit } = require('./models');
+const { sequelize, User, StorageLocation, Bichikuhin, StockRecord, Unit, Stocktaking } = require('./models');
 const path = require('path');
 
 const app = express();
@@ -39,7 +39,7 @@ const authenticateToken = (req, res, next) => {
 
 // --- トークン生成ヘルパー ---
 const generateTokens = (user) => {
-    const accessToken = jwt.sign({ id: user.id, name: user.name }, ACCESS_SECRET, { expiresIn: '5m' });
+    const accessToken = jwt.sign({ id: user.id, name: user.name, role: user.role }, ACCESS_SECRET, { expiresIn: '5m' });
     const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
     return { accessToken, refreshToken };
 };
@@ -54,6 +54,10 @@ app.get('/', authenticateToken, (req, res) => {
 // 2. ログインページ
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'login.html'));
+});
+
+app.get('/change_password', authenticateToken, (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'change_password.html'));
 });
 
 // 3. ログイン実行API
@@ -73,6 +77,31 @@ app.post('/api/login', async (req, res) => {
     res.status(401).json({ message: 'ユーザー名またはパスワードが正しくありません' });
 });
 
+// 新規ユーザー登録API
+app.post('/api/register', async (req, res) => {
+    const { name, password } = req.body;
+
+    if (!name || !password) {
+        return res.status(400).json({ message: 'ユーザー名とパスワードは必須です' });
+    }
+
+    try {
+        // ユーザー名の重複チェック
+        const existingUser = await User.findOne({ where: { name } });
+        if (existingUser) {
+            return res.status(409).json({ message: 'このユーザー名はすでに使用されています' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = await User.create({ name, password: hashedPassword, role: 'user' }); // デフォルトロールを'user'とする
+        
+        res.status(201).json({ success: true, message: 'ユーザー登録が完了しました', user: { id: newUser.id, name: newUser.name } });
+    } catch (error) {
+        console.error('ユーザー登録エラー:', error);
+        res.status(500).json({ message: 'サーバーエラーが発生しました' });
+    }
+});
+
 // 4. トークンリフレッシュAPI
 app.post('/api/refresh', (req, res) => {
     const refreshToken = req.cookies.refreshToken;
@@ -87,10 +116,78 @@ app.post('/api/refresh', (req, res) => {
     });
 });
 
-// 5. 備蓄品データ取得API
-app.get('/api/records', authenticateToken, async (req, res) => {
+// 5. 棚卸データ取得API
+app.get('/api/stocktakings', authenticateToken, async (req, res) => {
     try {
+        const stocktakings = await Stocktaking.findAll({
+            order: [['date', 'DESC']]
+        });
+        res.json(stocktakings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/stocktakings', authenticateToken, async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { name, date } = req.body;
+        if (!name || !date) {
+            return res.status(400).json({ error: 'Name and date are required' });
+        }
+
+        // Deactivate all other stocktakings
+        await Stocktaking.update({ active: false }, { where: {}, transaction: t });
+
+        // Create the new stocktaking as active
+        const newStocktaking = await Stocktaking.create({ name, date, active: true }, { transaction: t });
+
+        await t.commit();
+        res.status(201).json(newStocktaking);
+    } catch (err) {
+        await t.rollback();
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET expired records from active stocktaking
+app.get('/api/records/expired', async (req, res) => {
+    // セキュリティ：簡易的なAPIキーチェック（.envに定義）
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.CRON_API_KEY) {
+        return res.sendStatus(403);
+    }
+
+    try {
+        const activeStocktaking = await Stocktaking.findOne({ where: { active: true } });
+
+        if (!activeStocktaking) {
+            return res.json([]);
+        }
+
         const records = await StockRecord.findAll({
+            where: { 
+                StocktakingId: activeStocktaking.id,
+                expiry_date: {
+                    [Op.ne]: null,
+                    [Op.lt]: new Date()
+                }
+            },
+            include: [Bichikuhin, StorageLocation, Unit],
+            order: [['expiry_date', 'ASC']]
+        });
+        res.json(records);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. 備蓄品データ取得API
+app.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
+    try {
+        const { stocktakingId } = req.params;
+        const records = await StockRecord.findAll({
+            where: { StocktakingId: stocktakingId },
             include: [Bichikuhin, StorageLocation, Unit],
             order: [['entry_timestamp', 'DESC']]
         });
@@ -108,13 +205,13 @@ app.get('/api/masters', authenticateToken, async (req, res) => {
 });
 
 // 7. 新規登録/更新API
-app.post('/api/records', authenticateToken, async (req, res) => {
+const recordHandler = async (req, res) => {
     try {
-        const { id, bichikuhinId, locationId, quantity, expiryDate, unitId } = req.body;
+        const { id, bichikuhinId, locationId, quantity, expiryDate, unitId, stocktakingId } = req.body;
         if (id) {
             // 更新
             await StockRecord.update(
-                { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, UnitId: unitId },
+                { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, UnitId: unitId, StocktakingId: stocktakingId },
                 { where: { id } }
             );
         } else {
@@ -124,14 +221,18 @@ app.post('/api/records', authenticateToken, async (req, res) => {
                 StorageLocationId: locationId,
                 quantity,
                 expiry_date: expiryDate,
-                UnitId: unitId
+                UnitId: unitId,
+                StocktakingId: stocktakingId
             });
         }
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
-});
+};
+
+app.post('/api/records', authenticateToken, recordHandler);
+app.put('/api/records', authenticateToken, recordHandler);
 
 // 8. 備蓄品検索API
 app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
@@ -167,8 +268,77 @@ app.post('/api/bichikuhin', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/user', authenticateToken, (req, res) => {
-    res.json(req.user);
+app.get('/api/user', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({ id: user.id, name: user.name, name_jp: user.name_jp, role: user.role });
+    } catch (error) {
+        console.error('Failed to fetch user:', error);
+        res.status(500).json({ message: 'Failed to fetch user data' });
+    }
+});
+
+app.post('/api/change_password', authenticateToken, async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!oldPassword || !newPassword) {
+        return res.status(400).json({ message: '両方のパスワードフィールドは必須です' });
+    }
+
+    try {
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'ユーザーが見つかりません' });
+        }
+
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: '現在のパスワードが正しくありません' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await user.update({ password: hashedPassword });
+
+        res.json({ success: true, message: 'パスワードが正常に変更されました' });
+    } catch (error) {
+        console.error('パスワード変更エラー:', error);
+        res.status(500).json({ message: 'サーバーエラーが発生しました' });
+    }
+});
+
+const isAdmin = (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'アクセス権がありません' });
+    }
+    next();
+};
+
+app.put('/api/users/:id/password', async (req, res) => {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+        return res.status(400).json({ message: 'パスワードは必須です' });
+    }
+
+    try {
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ message: 'ユーザーが見つかりません' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await user.update({ password: hashedPassword });
+
+        res.json({ success: true, message: 'ユーザーのパスワードが正常に変更されました' });
+    } catch (error) {
+        console.error('管理者によるパスワード変更エラー:', error);
+        res.status(500).json({ message: 'サーバーエラーが発生しました' });
+    }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -187,6 +357,13 @@ sequelize.sync({ alter: true }).then(async () => {
         const hashedPassword = await bcrypt.hash('password123', 10);
         await User.create({ name: 'admin', password: hashedPassword, role: 'admin' });
         console.log('Default user created');
+    }
+
+    // Add a default stocktaking if none exists
+    const stocktakingCount = await Stocktaking.count();
+    if (stocktakingCount === 0) {
+        await Stocktaking.create({ name: '初期棚卸', date: new Date(), active: true });
+        console.log('Default stocktaking created');
     }
 
     app.listen(PORT, () => {

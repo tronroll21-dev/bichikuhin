@@ -8,7 +8,7 @@
 </head>
 <body class="bg-gray-100" x-data="stockManager()">
 
-    <nav class="bg-white shadow-md">
+    <nav class="print:hidden bg-white shadow-md">
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex justify-between">
                 <div class="flex space-x-4">
@@ -21,9 +21,10 @@
                 <div class="flex items-center space-x-1">
                     <div x-data="{ showMenu: false }" class="relative">
                         <button @click="showMenu = !showMenu" class="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full">
-                            <span x-text="user.name.charAt(0).toUpperCase()"></span>
+                            <span x-text="user.name_jp ? user.name_jp.charAt(0) : user.name.charAt(0).toUpperCase()"></span>
                         </button>
                         <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 py-2 w-48 bg-white rounded-md shadow-xl z-20">
+                            <a href="/change_password" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">パスワード変更</a>
                             <a href="#" @click.prevent="logout()" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">ログアウト</a>
                         </div>
                     </div>
@@ -32,64 +33,107 @@
         </div>
     </nav>
 
-    <div class="max-w-6xl mx-auto p-8">
-        
-        <div class="bg-white p-4 rounded shadow mb-6">
-            <div class="grid grid-cols-6 gap-4">
-                <div class="relative">
-                    <input type="text" x-model="bichikuhinName" @input.debounce.300ms="searchBichikuhin" @keydown.enter.prevent="handleBichikuhinEnter" placeholder="備蓄品名" class="border p-2 rounded w-full">
-                    <div x-show="showBichikuhinSuggestions" @click.away="showBichikuhinSuggestions = false" class="absolute z-10 w-full bg-white border rounded mt-1">
-                        <ul>
-                            <template x-for="item in bichikuhinSuggestions" :key="item.id">
-                                <li @click="selectBichikuhin(item)" class="p-2 hover:bg-gray-100 cursor-pointer" x-text="item.name"></li>
-                            </template>
-                        </ul>
+    <div class="max-w-screen-2xl mx-auto p-8 flex space-x-6">
+        <!-- Left Sidebar: Stocktaking List -->
+        <div class="w-1/4 print:hidden">
+            <div class="bg-white p-4 rounded shadow flex flex-col" style="height: calc(100vh - 100px);">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">棚卸一覧</h2>
+                    <button @click="openNewStocktakingForm()" class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600">
+                        <span class="font-bold text-xl">+</span>
+                    </button>
+                </div>
+
+                <!-- New Stocktaking Form -->
+                <div x-show="showNewStocktakingForm" class="mb-4 p-4 bg-gray-50 rounded">
+                    <h3 class="font-bold mb-2">新規棚卸</h3>
+                    <input type="text" x-model="newStocktaking.name" class="border p-2 rounded w-full mb-2">
+                    <input type="date" x-model="newStocktaking.date" class="border p-2 rounded w-full mb-2">
+                    <div class="flex justify-end space-x-2">
+                        <button @click="cancelNewStocktaking" class="bg-gray-300 px-3 py-1 rounded">x</button>
+                        <button @click="saveStocktaking" class="bg-blue-600 text-white px-3 py-1 rounded">✓</button>
                     </div>
                 </div>
-                <select x-model="form.locationId" class="border p-2 rounded">
-                    <option value="">保管場所を選択</option>
-                    <template x-for="loc in masters.locations">
-                        <option :value="loc.id" x-text="loc.name"></option>
+
+                <ul class="overflow-y-auto flex-grow">
+                    <template x-for="stocktaking in stocktakings" :key="stocktaking.id">
+                        <li @click="selectStocktaking(stocktaking.id)"
+                            :class="{ 'bg-blue-100': selectedStocktakingId === stocktaking.id }"
+                            class="p-3 hover:bg-gray-100 cursor-pointer rounded">
+                            <div class="flex justify-between items-center">
+                                <span class="font-semibold" x-text="stocktaking.name"></span>
+                                <template x-if="stocktaking.active">
+                                    <span class="bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full">現</span>
+                                </template>
+                            </div>
+                            <div class="text-sm text-gray-600" x-text="formatDate(stocktaking.date, { year: 'numeric', month: 'long', day: 'numeric' })"></div>
+                        </li>
                     </template>
-                </select>
-                <input type="number" x-model="form.quantity" placeholder="数量" class="border p-2 rounded">
-                <select x-model="form.unitId" class="border p-2 rounded">
-                    <option value="">単位を選択</option>
-                    <template x-for="unit in masters.units">
-                        <option :value="unit.id" x-text="unit.name"></option>
-                    </template>
-                </select>
-                <input type="date" x-model="form.expiryDate" class="border p-2 rounded">
-                <button @click="saveRecord()" class="bg-blue-600 text-white px-4 py-2 rounded">保存</button>
+                </ul>
             </div>
         </div>
 
-        <table class="w-full bg-white rounded shadow">
-            <thead>
-                <tr class="bg-gray-200 text-left">
-                    <th class="p-3">登録日時</th>
-                    <th class="p-3">品名</th>
-                    <th class="p-3">場所</th>
-                    <th class="p-3">数量</th>
-                    <th class="p-3">消費期限</th>
-                    <th class="p-3">操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                <template x-for="record in records" :key="record.id">
-                    <tr class="border-t">
-                        <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td>
-                        <td class="p-3" x-text="record.Bichikuhin?.name"></td>
-                        <td class="p-3" x-text="record.StorageLocation?.name"></td>
-                        <td class="p-3" x-text="`${record.quantity} ${record.Unit?.name}`"></td>
-                        <td class="p-3" x-text="record.expiry_date"></td>
-                        <td class="p-3">
-                            <button @click="editRecord(record)" class="text-blue-500 underline">編集</button>
-                        </td>
-                    </tr>
-                </template>
-            </tbody>
-        </table>
+        <!-- Right Content: Stock Records -->
+        <div class="print:w-full w-3/4 flex flex-col" style="height: calc(100vh - 100px);">
+            <div class="print:hidden bg-white p-4 rounded shadow mb-6 flex-shrink-0">
+                <div class="grid grid-cols-6 gap-4">
+                    <div class="relative">
+                        <input type="text" x-model="bichikuhinName" @input.debounce.300ms="searchBichikuhin" @keydown.enter.prevent="handleBichikuhinEnter" placeholder="備蓄品名" class="border p-2 rounded w-full">
+                        <div x-show="showBichikuhinSuggestions" @click.away="showBichikuhinSuggestions = false" class="absolute z-10 w-full bg-white border rounded mt-1">
+                            <ul>
+                                <template x-for="item in bichikuhinSuggestions" :key="item.id">
+                                    <li @click="selectBichikuhin(item)" class="p-2 hover:bg-gray-100 cursor-pointer" x-text="item.name"></li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+                    <select x-model="form.locationId" class="border p-2 rounded">
+                        <option value="">保管場所を選択</option>
+                        <template x-for="loc in masters.locations">
+                            <option :value="loc.id" x-text="loc.name"></option>
+                        </template>
+                    </select>
+                    <input type="number" x-model="form.quantity" placeholder="数量" class="border p-2 rounded">
+                    <select x-model="form.unitId" class="border p-2 rounded">
+                        <option value="">単位を選択</option>
+                        <template x-for="unit in masters.units">
+                            <option :value="unit.id" x-text="unit.name"></option>
+                        </template>
+                    </select>
+                    <input type="date" x-model="form.expiryDate" class="border p-2 rounded">
+                    <button @click="saveRecord()" :disabled="!selectedStocktakingId" class="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-400">保存</button>
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-y-auto print:overflow-y-visible bg-white rounded shadow">
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="bg-gray-200 text-left sticky top-0">
+                            <th class="p-3">登録日時</th>
+                            <th class="p-3">品名</th>
+                            <th class="p-3">場所</th>
+                            <th class="p-3">数量</th>
+                            <th class="p-3">消費期限</th>
+                            <th class="p-3 print:hidden">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="record in records" :key="record.id">
+                            <tr class="border-t">
+                                <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td>
+                                <td class="p-3" x-text="record.Bichikuhin?.name"></td>
+                                <td class="p-3" x-text="record.StorageLocation?.name"></td>
+                                <td class="p-3" x-text="`${record.quantity} ${record.Unit?.name}`"></td>
+                                <td class="p-3" x-text="record.expiry_date"></td>
+                                <td class="p-3 print:hidden">
+                                    <button @click="editRecord(record)" class="text-blue-500 underline">編集</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -97,28 +141,41 @@
             return {
                 records: [],
                 masters: { locations: [], units: [] },
-                form: { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', unitId: '' },
+                stocktakings: [],
+                selectedStocktakingId: null,
+                form: { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', unitId: '', stocktakingId: null },
                 user: { name: '' },
                 showMenu: false,
                 bichikuhinName: '',
                 bichikuhinSuggestions: [],
                 showBichikuhinSuggestions: false,
+                showNewStocktakingForm: false,
+                newStocktaking: { name: '', date: '' },
+
+                getTodayDateString() {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    return `${yyyy}-${mm}-${dd}`;
+                },
 
                 async init() {
                     await this.fetchUser();
-                    await this.fetchData();
                     await this.fetchMasters();
+                    await this.fetchStocktakings();
+                    if (this.stocktakings.length > 0) {
+                        this.selectStocktaking(this.stocktakings[0].id);
+                    }
+                    this.resetForm();
                 },
 
-                // 認証エラー時にリフレッシュを試みるラッパー
                 async apiFetch(url, options = {}) {
                     let response = await fetch(url, options);
-                    
                     if (response.status === 401) {
-                        // JWT期限切れの場合、リフレッシュを試行
                         const refreshRes = await fetch('/api/refresh', { method: 'POST' });
                         if (refreshRes.ok) {
-                            return fetch(url, options); // 再試行
+                            return fetch(url, options);
                         } else {
                             window.location.href = '/login';
                         }
@@ -131,9 +188,25 @@
                     this.user = await res.json();
                 },
 
-                async fetchData() {
-                    const res = await this.apiFetch('/api/records');
+                async fetchStocktakings() {
+                    const res = await this.apiFetch('/api/stocktakings');
+                    this.stocktakings = await res.json();
+                },
+
+                async fetchData(stocktakingId) {
+                    if (!stocktakingId) {
+                        this.records = [];
+                        return;
+                    }
+                    const res = await this.apiFetch(`/api/records/${stocktakingId}`);
                     this.records = await res.json();
+                },
+                
+                selectStocktaking(id) {
+                    this.selectedStocktakingId = id;
+                    this.fetchData(id);
+                    this.showNewStocktakingForm = false; // Hide form on selection change
+                    this.resetForm();
                 },
 
                 async fetchMasters() {
@@ -141,6 +214,35 @@
                     const data = await res.json();
                     this.masters.locations = data.locations;
                     this.masters.units = data.units;
+                },
+                
+                openNewStocktakingForm() {
+                    const today = this.getTodayDateString();
+                    this.newStocktaking.date = today;
+                    this.newStocktaking.name = `棚卸${today}`;
+                    this.showNewStocktakingForm = true;
+                },
+
+                cancelNewStocktaking() {
+                    this.showNewStocktakingForm = false;
+                    this.newStocktaking = { name: '', date: '' };
+                },
+
+                async saveStocktaking() {
+                    const res = await this.apiFetch('/api/stocktakings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.newStocktaking)
+                    });
+
+                    if (res.ok) {
+                        const savedStocktaking = await res.json();
+                        await this.fetchStocktakings(); // Refresh the list
+                        this.selectStocktaking(savedStocktaking.id); // Select the new one
+                        this.cancelNewStocktaking(); // Hide and reset the form
+                    } else {
+                        alert('棚卸の保存に失敗しました。');
+                    }
                 },
 
                 async searchBichikuhin() {
@@ -187,6 +289,12 @@
                 },
 
                 async saveRecord() {
+                    if (!this.selectedStocktakingId) {
+                        alert('まず棚卸を選択してください。');
+                        return;
+                    }
+                    this.form.stocktakingId = this.selectedStocktakingId;
+                    
                     const method = this.form.id ? 'PUT' : 'POST';
                     await this.apiFetch('/api/records', {
                         method: method,
@@ -194,7 +302,7 @@
                         body: JSON.stringify(this.form)
                     });
                     this.resetForm();
-                    this.fetchData();
+                    this.fetchData(this.selectedStocktakingId);
                 },
 
                 async logout() {
@@ -202,12 +310,24 @@
                     window.location.href = '/login';
                 },
 
-                formatDate(dateStr) {
-                    return new Date(dateStr).toLocaleString('ja-JP');
+                formatDate(dateStr, options = {}) {
+                    if (!dateStr) return '';
+                    const defaultOptions = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+                    const mergedOptions = { ...defaultOptions, ...options };
+                    return new Date(dateStr).toLocaleString('ja-JP', mergedOptions);
                 },
 
                 resetForm() {
-                    this.form = { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', unitId: '' };
+                    const stocktakingId = this.form.stocktakingId;
+                    this.form = { 
+                        id: null, 
+                        bichikuhinId: '', 
+                        locationId: '', 
+                        quantity: 0, 
+                        expiryDate: '', // Reverted: No default date for new entries
+                        unitId: '', 
+                        stocktakingId: stocktakingId 
+                    };
                     this.bichikuhinName = '';
                 },
 
@@ -219,6 +339,7 @@
                     this.form.quantity = record.quantity;
                     this.form.expiryDate = record.expiry_date;
                     this.form.unitId = record.UnitId;
+                    this.form.stocktakingId = record.StocktakingId;
                 }
             }
         }
