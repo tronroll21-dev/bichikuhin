@@ -51,6 +51,7 @@ const Bichikuhin = sequelize.define('Bichikuhin', {
 // 在庫記録テーブル
 const StockRecord = sequelize.define('StockRecord', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    kubun: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     expiry_date: { type: DataTypes.DATEONLY, allowNull: true },
     entry_timestamp: { 

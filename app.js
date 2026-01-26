@@ -145,7 +145,7 @@ app.post('/api/stocktakings', authenticateToken, async (req, res) => {
         // If there's a stocktaking to copy from, do it
         if (copyFromId) {
             const recordsToCopy = await StockRecord.findAll({
-                where: { StocktakingId: copyFromId },
+                where: { StocktakingId: copyFromId, kubun: 1 },
                 raw: true // Get plain data objects
             });
 
@@ -189,6 +189,7 @@ app.get('/api/records/expired', async (req, res) => {
         const records = await StockRecord.findAll({
             where: { 
                 StocktakingId: activeStocktaking.id,
+                kubun: 1,
                 expiry_date: {
                     [Op.ne]: null,
                     [Op.lt]: new Date()
@@ -208,7 +209,7 @@ app.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
     try {
         const { stocktakingId } = req.params;
         const records = await StockRecord.findAll({
-            where: { StocktakingId: stocktakingId },
+            where: { StocktakingId: stocktakingId, kubun: 1 },
             include: [{ model: Bichikuhin, include: [Unit] }, StorageLocation],
             order: [['entry_timestamp', 'DESC']]
         });
@@ -233,7 +234,7 @@ const recordHandler = async (req, res) => {
             // 更新
             await StockRecord.update(
                 { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, StocktakingId: stocktakingId },
-                { where: { id } }
+                { where: { id: id, kubun: 1 } }
             );
         } else {
             // 新規作成
@@ -242,7 +243,8 @@ const recordHandler = async (req, res) => {
                 StorageLocationId: locationId,
                 quantity,
                 expiry_date: expiryDate,
-                StocktakingId: stocktakingId
+                StocktakingId: stocktakingId,
+                kubun: 1
             });
         }
         res.json({ success: true });
