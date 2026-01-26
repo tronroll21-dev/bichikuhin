@@ -131,7 +131,7 @@ app.get('/api/stocktakings', authenticateToken, async (req, res) => {
 app.post('/api/stocktakings', authenticateToken, async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { name, date } = req.body;
+        const { name, date, copyFromId } = req.body;
         if (!name || !date) {
             return res.status(400).json({ error: 'Name and date are required' });
         }
@@ -142,10 +142,31 @@ app.post('/api/stocktakings', authenticateToken, async (req, res) => {
         // Create the new stocktaking as active
         const newStocktaking = await Stocktaking.create({ name, date, active: true }, { transaction: t });
 
+        // If there's a stocktaking to copy from, do it
+        if (copyFromId) {
+            const recordsToCopy = await StockRecord.findAll({
+                where: { StocktakingId: copyFromId },
+                raw: true // Get plain data objects
+            });
+
+            if (recordsToCopy.length > 0) {
+                const newRecords = recordsToCopy.map(record => {
+                    delete record.id; // Remove original ID
+                    delete record.entry_timestamp;
+                    return {
+                        ...record,
+                        StocktakingId: newStocktaking.id
+                    };
+                });
+                await StockRecord.bulkCreate(newRecords, { transaction: t });
+            }
+        }
+
         await t.commit();
         res.status(201).json(newStocktaking);
     } catch (err) {
         await t.rollback();
+        console.error("Error creating stocktaking:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -173,7 +194,7 @@ app.get('/api/records/expired', async (req, res) => {
                     [Op.lt]: new Date()
                 }
             },
-            include: [Bichikuhin, StorageLocation, Unit],
+            include: [{ model: Bichikuhin, include: [Unit] }, StorageLocation],
             order: [['expiry_date', 'ASC']]
         });
         res.json(records);
@@ -188,7 +209,7 @@ app.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
         const { stocktakingId } = req.params;
         const records = await StockRecord.findAll({
             where: { StocktakingId: stocktakingId },
-            include: [Bichikuhin, StorageLocation, Unit],
+            include: [{ model: Bichikuhin, include: [Unit] }, StorageLocation],
             order: [['entry_timestamp', 'DESC']]
         });
         res.json(records);
@@ -207,11 +228,11 @@ app.get('/api/masters', authenticateToken, async (req, res) => {
 // 7. 新規登録/更新API
 const recordHandler = async (req, res) => {
     try {
-        const { id, bichikuhinId, locationId, quantity, expiryDate, unitId, stocktakingId } = req.body;
+        const { id, bichikuhinId, locationId, quantity, expiryDate, stocktakingId } = req.body;
         if (id) {
             // 更新
             await StockRecord.update(
-                { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, UnitId: unitId, StocktakingId: stocktakingId },
+                { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, StocktakingId: stocktakingId },
                 { where: { id } }
             );
         } else {
@@ -221,7 +242,6 @@ const recordHandler = async (req, res) => {
                 StorageLocationId: locationId,
                 quantity,
                 expiry_date: expiryDate,
-                UnitId: unitId,
                 StocktakingId: stocktakingId
             });
         }
@@ -246,7 +266,8 @@ app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
                 name: {
                     [Op.like]: `%${name}%`
                 }
-            }
+            },
+            include: [Unit]
         });
         res.json(items);
     } catch (err) {
@@ -256,13 +277,14 @@ app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
 
 // 9. 備蓄品登録API
 app.post('/api/bichikuhin', authenticateToken, async (req, res) => {
-    const { name } = req.body;
+    const { name, unitId } = req.body;
     if (!name) {
         return res.status(400).json({ error: 'Name is required' });
     }
     try {
-        const newItem = await Bichikuhin.create({ name });
-        res.status(201).json(newItem);
+        const newItem = await Bichikuhin.create({ name, UnitId: unitId });
+        const result = await Bichikuhin.findByPk(newItem.id, { include: [Unit] });
+        res.status(201).json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

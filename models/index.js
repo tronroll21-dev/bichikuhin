@@ -74,8 +74,8 @@ StorageLocation.hasMany(StockRecord, { foreignKey: 'StorageLocationId' });
 StockRecord.belongsTo(StorageLocation);
 
 // 単位マスターとの紐付け (UnitId カラムが生成されます)
-Unit.hasMany(StockRecord, { foreignKey: 'UnitId' });
-StockRecord.belongsTo(Unit);
+Unit.hasMany(Bichikuhin, { foreignKey: 'UnitId', allowNull: true });
+Bichikuhin.belongsTo(Unit);
 
 // 棚卸テーブル
 const Stocktaking = sequelize.define('Stocktaking', {

@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>備蓄品管理システム</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
@@ -94,12 +95,7 @@
                         </template>
                     </select>
                     <input type="number" x-model="form.quantity" placeholder="数量" class="border p-2 rounded">
-                    <select x-model="form.unitId" class="border p-2 rounded">
-                        <option value="">単位を選択</option>
-                        <template x-for="unit in masters.units">
-                            <option :value="unit.id" x-text="unit.name"></option>
-                        </template>
-                    </select>
+                    <div class="border p-2 rounded bg-gray-100" x-text="selectedBichikuhin?.Unit?.name || '単位'"></div>
                     <input type="date" x-model="form.expiryDate" class="border p-2 rounded">
                     <button @click="saveRecord()" :disabled="!selectedStocktakingId" class="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-400">保存</button>
                 </div>
@@ -148,16 +144,12 @@
                                 
                                 <td class="p-3">
                                     <template x-if="editingRecordId !== record.id">
-                                        <span x-text="`${record.quantity} ${record.Unit?.name}`"></span>
+                                        <span x-text="`${record.quantity} ${record.Bichikuhin?.Unit?.name || ''}`"></span>
                                     </template>
                                     <template x-if="editingRecordId === record.id">
                                         <div class="flex items-center space-x-2">
                                             <input type="number" x-model="editFormData.quantity" @click.stop class="border p-1 rounded w-20">
-                                            <select x-model="editFormData.UnitId" @click.stop class="border p-1 rounded">
-                                                <template x-for="unit in masters.units">
-                                                    <option :value="unit.id" x-text="unit.name"></option>
-                                                </template>
-                                            </select>
+                                            <span x-text="editFormData.Bichikuhin?.Unit?.name || ''"></span>
                                         </div>
                                     </template>
                                 </td>
@@ -190,6 +182,30 @@
         </div>
     </div>
 
+    <!-- New Bichikuhin Modal -->
+    <div x-show="showNewBichikuhinModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-1/3">
+            <h3 class="text-lg font-bold mb-4">新規備蓄品登録</h3>
+            <div class="mb-4">
+                <label class="block mb-2">備蓄品名</label>
+                <input type="text" x-model="newBichikuhinName" class="border p-2 rounded w-full bg-gray-100" readonly>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">単位</label>
+                <select x-model="newBichikuhinUnitId" class="border p-2 rounded w-full">
+                    <option value="">単位を選択してください</option>
+                    <template x-for="unit in masters.units">
+                        <option :value="unit.id" x-text="unit.name"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button @click="closeNewBichikuhinModal()" class="bg-gray-300 px-4 py-2 rounded">キャンセル</button>
+                <button @click="addNewBichikuhin()" class="bg-blue-600 text-white px-4 py-2 rounded" :disabled="!newBichikuhinUnitId">登録</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function stockManager() {
             return {
@@ -197,16 +213,22 @@
                 masters: { locations: [], units: [] },
                 stocktakings: [],
                 selectedStocktakingId: null,
-                form: { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', unitId: '', stocktakingId: null },
+                form: { id: null, bichikuhinId: '', locationId: '', quantity: 0, expiryDate: '', stocktakingId: null },
                 user: { name: '' },
                 showMenu: false,
                 bichikuhinName: '',
+                selectedBichikuhin: null,
                 bichikuhinSuggestions: [],
                 showBichikuhinSuggestions: false,
                 showNewStocktakingForm: false,
                 newStocktaking: { name: '', date: '' },
                 editingRecordId: null,
                 editFormData: {},
+
+                // New state for the new bichikuhin modal
+                showNewBichikuhinModal: false,
+                newBichikuhinName: '',
+                newBichikuhinUnitId: null,
 
                 getTodayDateString() {
                     const today = new Date();
@@ -221,7 +243,8 @@
                     await this.fetchMasters();
                     await this.fetchStocktakings();
                     if (this.stocktakings.length > 0) {
-                        this.selectStocktaking(this.stocktakings[0].id);
+                        const activeOne = this.stocktakings.find(s => s.active) || this.stocktakings[0];
+                        this.selectStocktaking(activeOne.id);
                     }
                     this.resetForm();
                 },
@@ -261,7 +284,7 @@
                 selectStocktaking(id) {
                     this.selectedStocktakingId = id;
                     this.fetchData(id);
-                    this.showNewStocktakingForm = false; // Hide form on selection change
+                    this.showNewStocktakingForm = false;
                     this.resetForm();
                 },
 
@@ -285,17 +308,23 @@
                 },
 
                 async saveStocktaking() {
+                    const activeStocktaking = this.stocktakings.find(st => st.active);
+                    const payload = {
+                        ...this.newStocktaking,
+                        copyFromId: activeStocktaking ? activeStocktaking.id : null
+                    };
+
                     const res = await this.apiFetch('/api/stocktakings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.newStocktaking)
+                        body: JSON.stringify(payload)
                     });
 
                     if (res.ok) {
                         const savedStocktaking = await res.json();
-                        await this.fetchStocktakings(); // Refresh the list
-                        this.selectStocktaking(savedStocktaking.id); // Select the new one
-                        this.cancelNewStocktaking(); // Hide and reset the form
+                        await this.fetchStocktakings();
+                        this.selectStocktaking(savedStocktaking.id);
+                        this.cancelNewStocktaking();
                     } else {
                         alert('棚卸の保存に失敗しました。');
                     }
@@ -303,7 +332,7 @@
 
                 async searchBichikuhin() {
                     if (this.bichikuhinName.length < 2) {
-                        this.showBichikuhinSuggestions = false;
+                        this.bichikuhinSuggestions = false;
                         return;
                     }
                     const res = await this.apiFetch(`/api/bichikuhin?name=${this.bichikuhinName}`);
@@ -314,6 +343,7 @@
                 selectBichikuhin(item) {
                     this.bichikuhinName = item.name;
                     this.form.bichikuhinId = item.id;
+                    this.selectedBichikuhin = item; // Keep the whole object
                     this.showBichikuhinSuggestions = false;
                 },
 
@@ -323,22 +353,38 @@
                     } else {
                         const found = this.bichikuhinSuggestions.find(item => item.name === this.bichikuhinName);
                         if (!found) {
-                            if (confirm(`'${this.bichikuhinName}' は新しい備蓄品です。登録しますか？`)) {
-                                await this.addNewBichikuhin(this.bichikuhinName);
-                            }
+                            // Open the modal to create a new one
+                            this.newBichikuhinName = this.bichikuhinName;
+                            this.showNewBichikuhinModal = true;
                         }
                     }
                 },
                 
-                async addNewBichikuhin(name) {
+                openNewBichikuhinModal() {
+                    this.newBichikuhinName = this.bichikuhinName;
+                    this.showNewBichikuhinModal = true;
+                },
+
+                closeNewBichikuhinModal() {
+                    this.showNewBichikuhinModal = false;
+                    this.newBichikuhinName = '';
+                    this.newBichikuhinUnitId = null;
+                },
+
+                async addNewBichikuhin() {
+                    if (!this.newBichikuhinUnitId) {
+                        alert('単位を選択してください。');
+                        return;
+                    }
                     const res = await this.apiFetch('/api/bichikuhin', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: name })
+                        body: JSON.stringify({ name: this.newBichikuhinName, unitId: this.newBichikuhinUnitId })
                     });
                     if (res.ok) {
                         const newItem = await res.json();
                         this.selectBichikuhin(newItem);
+                        this.closeNewBichikuhinModal();
                     } else {
                         alert('備蓄品の登録に失敗しました。');
                     }
@@ -373,33 +419,19 @@
                 },
 
                 async saveEdit() {
-                    // Resolve Bichikuhin ID from name
                     let bichikuhinId = this.editFormData.BichikuhinId;
                     const originalRecord = this.records.find(r => r.id === this.editFormData.id);
+
                     if (this.editFormData.Bichikuhin.name !== originalRecord.Bichikuhin.name) {
-                         const res = await this.apiFetch(`/api/bichikuhin?name=${this.editFormData.Bichikuhin.name}`);
+                         const res = await this.apiFetch(`/api/bichikuhin?name=${encodeURIComponent(this.editFormData.Bichikuhin.name)}`);
                          if(res.ok) {
                             const items = await res.json();
                             const exactMatch = items.find(item => item.name === this.editFormData.Bichikuhin.name);
                             if(exactMatch) {
                                 bichikuhinId = exactMatch.id;
                             } else {
-                                if (!this.editFormData.Bichikuhin.name) {
-                                    alert('備蓄品名は必須です。');
-                                    return;
-                                }
-                                const newBichikuhinRes = await this.apiFetch('/api/bichikuhin', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ name: this.editFormData.Bichikuhin.name })
-                                });
-                                if (newBichikuhinRes.ok) {
-                                    const newItem = await newBichikuhinRes.json();
-                                    bichikuhinId = newItem.id;
-                                } else {
-                                    alert('新しい備蓄品の作成に失敗しました。');
-                                    return;
-                                }
+                                alert(`'${this.editFormData.Bichikuhin.name}'は新しい備蓄品です。まず上のフォームから単位を指定して登録してください。`);
+                                return;
                             }
                          }
                     }
@@ -409,7 +441,6 @@
                         bichikuhinId: bichikuhinId,
                         locationId: this.editFormData.StorageLocationId,
                         quantity: this.editFormData.quantity,
-                        unitId: this.editFormData.UnitId,
                         expiryDate: this.editFormData.expiry_date,
                         stocktakingId: this.editFormData.StocktakingId
                     };
@@ -447,21 +478,21 @@
                         bichikuhinId: '', 
                         locationId: '', 
                         quantity: 0, 
-                        expiryDate: '', // Reverted: No default date for new entries
-                        unitId: '', 
+                        expiryDate: '',
                         stocktakingId: stocktakingId 
                     };
                     this.bichikuhinName = '';
+                    this.selectedBichikuhin = null;
                 },
 
                 editRecord(record) {
                     this.form.id = record.id;
                     this.form.bichikuhinId = record.BichikuhinId;
                     this.bichikuhinName = record.Bichikuhin?.name || '';
+                    this.selectedBichikuhin = record.Bichikuhin;
                     this.form.locationId = record.StorageLocationId;
                     this.form.quantity = record.quantity;
                     this.form.expiryDate = record.expiry_date;
-                    this.form.unitId = record.UnitId;
                     this.form.stocktakingId = record.StocktakingId;
                 }
             }
