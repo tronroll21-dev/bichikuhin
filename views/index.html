@@ -119,14 +119,68 @@
                     </thead>
                     <tbody>
                         <template x-for="record in records" :key="record.id">
-                            <tr class="border-t">
+                            <tr class.bind="'border-t ' + (editingRecordId === record.id ? 'bg-yellow-50' : 'hover:bg-gray-50 cursor-pointer')"
+                                @click="editingRecordId !== record.id ? startEditing(record) : null">
+                                
                                 <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td>
-                                <td class="p-3" x-text="record.Bichikuhin?.name"></td>
-                                <td class="p-3" x-text="record.StorageLocation?.name"></td>
-                                <td class="p-3" x-text="`${record.quantity} ${record.Unit?.name}`"></td>
-                                <td class="p-3" x-text="record.expiry_date"></td>
+                                
+                                <td class="p-3">
+                                    <template x-if="editingRecordId !== record.id">
+                                        <span x-text="record.Bichikuhin?.name"></span>
+                                    </template>
+                                    <template x-if="editingRecordId === record.id">
+                                        <input type="text" x-model="editFormData.Bichikuhin.name" @click.stop class="border p-1 rounded w-full">
+                                    </template>
+                                </td>
+                                
+                                <td class="p-3">
+                                    <template x-if="editingRecordId !== record.id">
+                                        <span x-text="record.StorageLocation?.name"></span>
+                                    </template>
+                                    <template x-if="editingRecordId === record.id">
+                                        <select x-model="editFormData.StorageLocationId" @click.stop class="border p-1 rounded w-full">
+                                            <template x-for="loc in masters.locations">
+                                                <option :value="loc.id" x-text="loc.name"></option>
+                                            </template>
+                                        </select>
+                                    </template>
+                                </td>
+                                
+                                <td class="p-3">
+                                    <template x-if="editingRecordId !== record.id">
+                                        <span x-text="`${record.quantity} ${record.Unit?.name}`"></span>
+                                    </template>
+                                    <template x-if="editingRecordId === record.id">
+                                        <div class="flex items-center space-x-2">
+                                            <input type="number" x-model="editFormData.quantity" @click.stop class="border p-1 rounded w-20">
+                                            <select x-model="editFormData.UnitId" @click.stop class="border p-1 rounded">
+                                                <template x-for="unit in masters.units">
+                                                    <option :value="unit.id" x-text="unit.name"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </template>
+                                </td>
+                                
+                                <td class="p-3">
+                                    <template x-if="editingRecordId !== record.id">
+                                        <span x-text="record.expiry_date"></span>
+                                    </template>
+                                    <template x-if="editingRecordId === record.id">
+                                        <input type="date" x-model="editFormData.expiry_date" @click.stop class="border p-1 rounded w-full">
+                                    </template>
+                                </td>
+
                                 <td class="p-3 print:hidden">
-                                    <button @click="editRecord(record)" class="text-blue-500 underline">編集</button>
+                                    <template x-if="editingRecordId === record.id">
+                                        <div class="flex space-x-2">
+                                            <button @click.stop="saveEdit()" class="bg-green-500 text-white px-3 py-1 rounded">保存</button>
+                                            <button @click.stop="cancelEdit()" class="bg-gray-500 text-white px-3 py-1 rounded">キャンセル</button>
+                                        </div>
+                                    </template>
+                                    <template x-if="editingRecordId !== record.id">
+                                        <button @click.stop="startEditing(record)" class="text-blue-500 underline">編集</button>
+                                    </template>
                                 </td>
                             </tr>
                         </template>
@@ -151,6 +205,8 @@
                 showBichikuhinSuggestions: false,
                 showNewStocktakingForm: false,
                 newStocktaking: { name: '', date: '' },
+                editingRecordId: null,
+                editFormData: {},
 
                 getTodayDateString() {
                     const today = new Date();
@@ -303,6 +359,73 @@
                     });
                     this.resetForm();
                     this.fetchData(this.selectedStocktakingId);
+                },
+
+                startEditing(record) {
+                    this.editingRecordId = record.id;
+                    this.editFormData = JSON.parse(JSON.stringify(record));
+                    if (!this.editFormData.Bichikuhin) this.editFormData.Bichikuhin = { name: '' };
+                },
+
+                cancelEdit() {
+                    this.editingRecordId = null;
+                    this.editFormData = {};
+                },
+
+                async saveEdit() {
+                    // Resolve Bichikuhin ID from name
+                    let bichikuhinId = this.editFormData.BichikuhinId;
+                    const originalRecord = this.records.find(r => r.id === this.editFormData.id);
+                    if (this.editFormData.Bichikuhin.name !== originalRecord.Bichikuhin.name) {
+                         const res = await this.apiFetch(`/api/bichikuhin?name=${this.editFormData.Bichikuhin.name}`);
+                         if(res.ok) {
+                            const items = await res.json();
+                            const exactMatch = items.find(item => item.name === this.editFormData.Bichikuhin.name);
+                            if(exactMatch) {
+                                bichikuhinId = exactMatch.id;
+                            } else {
+                                if (!this.editFormData.Bichikuhin.name) {
+                                    alert('備蓄品名は必須です。');
+                                    return;
+                                }
+                                const newBichikuhinRes = await this.apiFetch('/api/bichikuhin', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ name: this.editFormData.Bichikuhin.name })
+                                });
+                                if (newBichikuhinRes.ok) {
+                                    const newItem = await newBichikuhinRes.json();
+                                    bichikuhinId = newItem.id;
+                                } else {
+                                    alert('新しい備蓄品の作成に失敗しました。');
+                                    return;
+                                }
+                            }
+                         }
+                    }
+
+                    const payload = {
+                        id: this.editFormData.id,
+                        bichikuhinId: bichikuhinId,
+                        locationId: this.editFormData.StorageLocationId,
+                        quantity: this.editFormData.quantity,
+                        unitId: this.editFormData.UnitId,
+                        expiryDate: this.editFormData.expiry_date,
+                        stocktakingId: this.editFormData.StocktakingId
+                    };
+                    
+                    const res = await this.apiFetch('/api/records', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (res.ok) {
+                        this.cancelEdit();
+                        await this.fetchData(this.selectedStocktakingId);
+                    } else {
+                        alert('レコードの更新に失敗しました。');
+                    }
                 },
 
                 async logout() {
