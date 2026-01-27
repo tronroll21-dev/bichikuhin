@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>棚卸票 印刷プレビュー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+        body {
+            background-color: rgb(229 231 235);
+            font-family: 'Noto Sans JP', sans-serif;
+        }
+        .page-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .page {
+            background: white;
+            width: 210mm;
+            height: 297mm;
+            margin: 1rem;
+            padding: 1.5cm;
+            box-shadow: 0 0 0.5cm rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+        .page-content {
+            flex-grow: 1;
+            overflow: hidden;
+        }
+        .page-footer {
+            text-align: center;
+            font-size: 0.9em;
+            padding-top: 0.5rem;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .print-button {
+                display: none;
+            }
+            .page-container {
+                padding: 0;
+                margin: 0;
+            }
+            .page {
+                box-shadow: none;
+                margin: 0;
+                padding: 1cm; /* Adjust print margins */
+                height: auto;
+                break-after: page;
+            }
+            thead {
+                display: table-header-group; /* Ensures header repetition on page break */
+            }
+        }
+    </style>
+</head>
+<body x-data="printManager()">
+
+    <div class="print-button fixed top-4 right-4 z-50">
+        <button @click="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow-lg">
+            印刷
+        </button>
+    </div>
+
+    <div id="page-container" class="page-container">
+        <!-- Pages are dynamically generated and inserted here -->
+    </div>
+
+    <script>
+        function printManager() {
+            return {
+                stocktaking: {},
+
+                async init() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const stocktakingId = urlParams.get('id');
+                    if (!stocktakingId) {
+                        document.getElementById('page-container').innerHTML = `<div class="text-center p-8"><h1>棚卸IDが指定されていません。</h1></div>`;
+                        return;
+                    }
+                    
+                    const stocktakingRes = await this.apiFetch(`/api/stocktakings/${stocktakingId}`);
+                    this.stocktaking = await stocktakingRes.json();
+                    
+                    const recordsRes = await this.apiFetch(`/api/records/${stocktakingId}`);
+                    const records = await recordsRes.json();
+                    
+                    const groupedRecords = records.reduce((acc, record) => {
+                        const locationId = record.StorageLocation?.id || 'unknown'; // Get ID
+                        const locationName = record.StorageLocation?.name || '場所未定';
+                        
+                        if (!acc[locationId]) {
+                            acc[locationId] = {
+                                name: locationName,
+                                id: locationId,
+                                records: []
+                            };
+                        }
+                        acc[locationId].records.push(record);
+                        return acc;
+                    }, {});
+
+                    this.$nextTick(() => this.paginate(groupedRecords));
+                },
+
+                paginate(groupedRecords) {
+                    const container = document.getElementById('page-container');
+                    container.innerHTML = ''; 
+                    const sortedLocationIds = Object.keys(groupedRecords).sort(); // Sort by ID now
+                    
+                    let pageNum = 1;
+                    let currentPage = this.createPage(pageNum);
+                    let table, tbody, contentDiv;
+
+                    const setupNewPage = () => {
+                        container.appendChild(currentPage);
+                        contentDiv = currentPage.querySelector('.page-content');
+                        table = this.createTable();
+                        tbody = table.querySelector('tbody');
+                        contentDiv.appendChild(table);
+                    };
+
+                    setupNewPage();
+
+                    for (const locationId of sortedLocationIds) { // Iterate by ID
+                        const locationGroup = groupedRecords[locationId];
+                        let locationHeader = this.createLocationHeader(locationGroup.name, locationGroup.id); // Pass name and ID
+                        tbody.appendChild(locationHeader);
+
+                        // Check if header fits, if not, new page
+                        if (contentDiv.scrollHeight > contentDiv.clientHeight) {
+                            tbody.removeChild(locationHeader);
+                            currentPage = this.createPage(++pageNum);
+                            setupNewPage();
+                            locationHeader = this.createLocationHeader(locationGroup.name, locationGroup.id);
+                            tbody.appendChild(locationHeader);
+                        }
+
+                        for (const record of locationGroup.records) { // Iterate through records
+                            const row = this.createRecordRow(record);
+                            tbody.appendChild(row);
+
+                            // If row overflows, move it to a new page with repeated header
+                            if (contentDiv.scrollHeight > contentDiv.clientHeight) {
+                                tbody.removeChild(row);
+                                currentPage = this.createPage(++pageNum);
+                                setupNewPage();
+                                
+                                // Repeat location header on new page
+                                const repeatedHeader = this.createLocationHeader(locationGroup.name, locationGroup.id);
+                                tbody.appendChild(repeatedHeader);
+                                tbody.appendChild(row); // Add the row that overflowed
+                            }
+                        }
+                    }
+                    
+                    // Update all page footers with the total page count
+                    const totalPages = container.children.length;
+                    container.querySelectorAll('.page-footer-text').forEach(footer => {
+                        footer.textContent = `${footer.dataset.pagenum} / ${totalPages}`;
+                    });
+                },
+
+                createPage(pageNum) {
+                    const page = document.createElement('div');
+                    page.className = 'page';
+                    page.innerHTML = `
+                        <header class="mb-4">
+                            <h1 class="text-2xl font-bold">棚卸票: ${this.stocktaking.name}</h1>
+                            <p class="text-sm text-gray-600">${this.formatDate(this.stocktaking.date, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        </header>
+                        <div class="page-content"></div>
+                        <footer class="page-footer">
+                            <span class="page-footer-text" data-pagenum="${pageNum}">${pageNum}</span>
+                        </footer>
+                    `;
+                    return page;
+                },
+
+                createTable() {
+                    const table = document.createElement('table');
+                    table.className = 'w-full text-sm';
+                    table.innerHTML = `
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-1 py-[0.13rem] border text-left w-1/2">品名</th>
+                                <th class="px-1 py-[0.13rem] border text-left w-1/4">消費期限</th>
+                                <th class="px-1 py-[0.13rem] border text-left w-1/4">数量</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    `;
+                    return table;
+                },
+
+                createLocationHeader(locationName, locationId) {
+                    let formattedLocationId = '';
+                    if (locationId && typeof locationId === 'number') { // Ensure ID is a number
+                        formattedLocationId = String(locationId).padStart(3, '0'); // Ensure 3 digits
+                        if (formattedLocationId.length === 3 && formattedLocationId[1] === '0') {
+                            formattedLocationId = `${formattedLocationId[0]}-${formattedLocationId[2]}`;
+                        } else if (formattedLocationId.length === 3) {
+                             formattedLocationId = `${formattedLocationId[0]}${formattedLocationId[1]}${formattedLocationId[2]}`;
+                        }
+                    }
+                    const headerRow = document.createElement('tr');
+                    headerRow.innerHTML = `<td colspan="3" class="px-1 py-[0.05rem] font-bold text-base bg-gray-200 border">${locationName} (${formattedLocationId})</td>`;
+                    return headerRow;
+                },
+
+                createRecordRow(record) {
+                    const row = document.createElement('tr');
+                    const quantity = `${record.quantity} ${record.Bichikuhin?.Unit?.name || ''}`;
+                    row.innerHTML = `
+                        <td class="py-[0.13rem] px-1 border">${record.Bichikuhin?.name || ''}</td>
+                        <td class="py-[0.13rem] px-1 border">${this.formatDate(record.expiry_date)}</td>
+                        <td class="py-[0.13rem] px-1 border">${quantity}</td>
+                    `;
+                    return row;
+                },
+
+                formatDate(dateStr, options = {}) {
+                    if (!dateStr) return '';
+                    const defaultOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
+                    return new Date(dateStr).toLocaleDateString('ja-JP', { ...defaultOptions, ...options });
+                },
+
+                async apiFetch(url, options = {}) {
+                    let response = await fetch(url, options);
+                    if (response.status === 401) {
+                        const refreshRes = await fetch('/api/refresh', { method: 'POST' });
+                        if (refreshRes.ok) {
+                            return fetch(url, options);
+                        } else {
+                            window.location.href = '/login';
+                        }
+                    }
+                    return response;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

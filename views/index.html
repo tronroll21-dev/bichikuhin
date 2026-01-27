@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
+
 <body class="bg-gray-100" x-data="stockManager()">
 
     <nav class="print:hidden bg-white shadow-md">
@@ -21,12 +23,17 @@
                 </div>
                 <div class="flex items-center space-x-1">
                     <div x-data="{ showMenu: false }" class="relative">
-                        <button @click="showMenu = !showMenu" class="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full">
-                            <span x-text="user.name_jp ? user.name_jp.charAt(0) : user.name.charAt(0).toUpperCase()"></span>
+                        <button @click="showMenu = !showMenu"
+                            class="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full">
+                            <span
+                                x-text="user.name_jp ? user.name_jp.charAt(0) : user.name.charAt(0).toUpperCase()"></span>
                         </button>
-                        <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 py-2 w-48 bg-white rounded-md shadow-xl z-20">
-                            <a href="/change_password" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">パスワード変更</a>
-                            <a href="#" @click.prevent="logout()" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">ログアウト</a>
+                        <div x-show="showMenu" @click.away="showMenu = false"
+                            class="absolute right-0 mt-2 py-2 w-48 bg-white rounded-md shadow-xl z-20">
+                            <a href="/change_password"
+                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">パスワード変更</a>
+                            <a href="#" @click.prevent="logout()"
+                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">ログアウト</a>
                         </div>
                     </div>
                 </div>
@@ -40,7 +47,8 @@
             <div class="bg-white p-4 rounded shadow flex flex-col" style="height: calc(100vh - 100px);">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold">棚卸一覧</h2>
-                    <button @click="openNewStocktakingForm()" class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600">
+                    <button @click="openNewStocktakingForm()"
+                        class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600">
                         <span class="font-bold text-xl">+</span>
                     </button>
                 </div>
@@ -62,12 +70,31 @@
                             :class="{ 'bg-blue-100': selectedStocktakingId === stocktaking.id }"
                             class="p-3 hover:bg-gray-100 cursor-pointer rounded">
                             <div class="flex justify-between items-center">
-                                <span class="font-semibold" x-text="stocktaking.name"></span>
+                                <div>
+                                    <span class="font-semibold" x-text="stocktaking.name"></span>
+                                    <div class="text-sm text-gray-600"
+                                        x-text="formatDate(stocktaking.date, { year: 'numeric', month: 'long', day: 'numeric' })">
+                                    </div>
+                                </div>
                                 <template x-if="stocktaking.active">
-                                    <span class="bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full">現</span>
+                                    <div class="flex items-center space-x-2">
+                                        <a :href="'/print_preview?id=' + stocktaking.id" target="_blank" @click.stop
+                                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center"
+                                            title="棚卸票を印刷">
+                                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M7 18H6.2C5.0799 18 4.51984 18 4.09202 17.782C3.71569 17.5903 3.40973 17.2843 3.21799 16.908C3 16.4802 3 15.9201 3 14.8V10.2C3 9.0799 3 8.51984 3.21799 8.09202C3.40973 7.71569 3.71569 7.40973 4.09202 7.21799C4.51984 7 5.0799 7 6.2 7H7M17 18H17.8C18.9201 18 19.4802 18 19.908 17.782C20.2843 17.5903 20.5903 17.2843 20.782 16.908C21 16.4802 21 15.9201 21 14.8V10.2C21 9.07989 21 8.51984 20.782 8.09202C20.5903 7.71569 20.2843 7.40973 19.908 7.21799C19.4802 7 18.9201 7 17.8 7H17M7 11H7.01M17 7V5.4V4.6C17 4.03995 17 3.75992 16.891 3.54601C16.7951 3.35785 16.6422 3.20487 16.454 3.10899C16.2401 3 15.9601 3 15.4 3H8.6C8.03995 3 7.75992 3 7.54601 3.10899C7.35785 3.20487 7.20487 3.35785 7.10899 3.54601C7 3.75992 7 4.03995 7 4.6V5.4V7M17 7H7M8.6 21H15.4C15.9601 21 16.2401 21 16.454 20.891C16.6422 20.7951 16.7951 20.6422 16.891 20.454C17 20.2401 17 19.9601 17 19.4V16.6C17 16.0399 17 15.7599 16.891 15.546C16.7951 15.3578 16.6422 15.2049 16.454 15.109C16.2401 15 15.9601 15 15.4 15H8.6C8.03995 15 7.75992 15 7.54601 15.109C7.35785 15.2049 7.20487 15.3578 7.10899 15.546C7 15.7599 7 16.0399 7 16.6V19.4C7 19.9601 7 20.2401 7.10899 20.454C7.20487 20.6422 7.35785 20.7951 7.54601 20.891C7.75992 21 8.03995 21 8.6 21Z"
+                                                    stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round" />
+                                            </svg>
+                                        </a>
+                                        <a :href="'/tanaoroshi?id=' + stocktaking.id" @click.stop
+                                            class="hidden bg-blue-500 hover:bg-blue-700 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center">棚</a>
+                                        <span
+                                            class="bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full">現</span>
+                                    </div>
                                 </template>
                             </div>
-                            <div class="text-sm text-gray-600" x-text="formatDate(stocktaking.date, { year: 'numeric', month: 'long', day: 'numeric' })"></div>
                         </li>
                     </template>
                 </ul>
@@ -79,11 +106,15 @@
             <div class="print:hidden bg-white p-4 rounded shadow mb-6 flex-shrink-0">
                 <div class="grid grid-cols-6 gap-4">
                     <div class="relative">
-                        <input type="text" x-model="bichikuhinName" @input.debounce.300ms="searchBichikuhin" @keydown.enter.prevent="handleBichikuhinEnter" placeholder="備蓄品名" class="border p-2 rounded w-full">
-                        <div x-show="showBichikuhinSuggestions" @click.away="showBichikuhinSuggestions = false" class="absolute z-10 w-full bg-white border rounded mt-1">
+                        <input type="text" x-model="bichikuhinName" @input.debounce.300ms="searchBichikuhin"
+                            @keydown.enter.prevent="handleBichikuhinEnter" placeholder="備蓄品名"
+                            class="border p-2 rounded w-full">
+                        <div x-show="showBichikuhinSuggestions" @click.away="showBichikuhinSuggestions = false"
+                            class="absolute z-10 w-full bg-white border rounded mt-1">
                             <ul>
                                 <template x-for="item in bichikuhinSuggestions" :key="item.id">
-                                    <li @click="selectBichikuhin(item)" class="p-2 hover:bg-gray-100 cursor-pointer" x-text="item.name"></li>
+                                    <li @click="selectBichikuhin(item)" class="p-2 hover:bg-gray-100 cursor-pointer"
+                                        x-text="item.name"></li>
                                 </template>
                             </ul>
                         </div>
@@ -97,7 +128,8 @@
                     <input type="number" x-model="form.quantity" placeholder="数量" class="border p-2 rounded">
                     <div class="border p-2 rounded bg-gray-100" x-text="selectedBichikuhin?.Unit?.name || '単位'"></div>
                     <input type="date" x-model="form.expiryDate" class="border p-2 rounded">
-                    <button @click="saveRecord()" :disabled="!selectedStocktakingId" class="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-400">保存</button>
+                    <button @click="saveRecord()" :disabled="!selectedStocktakingId"
+                        class="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-400">保存</button>
                 </div>
             </div>
 
@@ -105,7 +137,7 @@
                 <table class="min-w-full">
                     <thead>
                         <tr class="bg-gray-200 text-left sticky top-0">
-                            <th class="p-3">登録日時</th>
+                            <!-- <th class="p-3">登録日時</th> -->
                             <th class="p-3">品名</th>
                             <th class="p-3">場所</th>
                             <th class="p-3">数量</th>
@@ -117,61 +149,80 @@
                         <template x-for="record in records" :key="record.id">
                             <tr class.bind="'border-t ' + (editingRecordId === record.id ? 'bg-yellow-50' : 'hover:bg-gray-50 cursor-pointer')"
                                 @click="editingRecordId !== record.id ? startEditing(record) : null">
-                                
-                                <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td>
-                                
+
+                                <!-- <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td> -->
+
                                 <td class="p-3">
                                     <template x-if="editingRecordId !== record.id">
                                         <span x-text="record.Bichikuhin?.name"></span>
                                     </template>
                                     <template x-if="editingRecordId === record.id">
-                                        <input type="text" x-model="editFormData.Bichikuhin.name" @click.stop class="border p-1 rounded w-full">
+                                        <input type="text" x-model="editFormData.Bichikuhin.name" @click.stop
+                                            class="border p-1 rounded w-full">
                                     </template>
                                 </td>
-                                
+
                                 <td class="p-3">
                                     <template x-if="editingRecordId !== record.id">
                                         <span x-text="record.StorageLocation?.name"></span>
                                     </template>
                                     <template x-if="editingRecordId === record.id">
-                                        <select x-model="editFormData.StorageLocationId" @click.stop class="border p-1 rounded w-full">
+                                        <select x-model="editFormData.StorageLocationId" @click.stop
+                                            class="border p-1 rounded w-full">
                                             <template x-for="loc in masters.locations">
                                                 <option :value="loc.id" x-text="loc.name"></option>
                                             </template>
                                         </select>
                                     </template>
                                 </td>
-                                
+
                                 <td class="p-3">
                                     <template x-if="editingRecordId !== record.id">
-                                        <span x-text="`${record.quantity} ${record.Bichikuhin?.Unit?.name || ''}`"></span>
+                                        <span
+                                            x-text="`${record.quantity} ${record.Bichikuhin?.Unit?.name || ''}`"></span>
                                     </template>
                                     <template x-if="editingRecordId === record.id">
                                         <div class="flex items-center space-x-2">
-                                            <input type="number" x-model="editFormData.quantity" @click.stop class="border p-1 rounded w-20">
+                                            <input type="number" x-model="editFormData.quantity" @click.stop
+                                                class="border p-1 rounded w-20">
                                             <span x-text="editFormData.Bichikuhin?.Unit?.name || ''"></span>
                                         </div>
                                     </template>
                                 </td>
-                                
+
                                 <td class="p-3">
                                     <template x-if="editingRecordId !== record.id">
                                         <span x-text="record.expiry_date"></span>
                                     </template>
                                     <template x-if="editingRecordId === record.id">
-                                        <input type="date" x-model="editFormData.expiry_date" @click.stop class="border p-1 rounded w-full">
+                                        <input type="date" x-model="editFormData.expiry_date" @click.stop
+                                            class="border p-1 rounded w-full">
                                     </template>
                                 </td>
 
                                 <td class="p-3 print:hidden">
                                     <template x-if="editingRecordId === record.id">
                                         <div class="flex space-x-2">
-                                            <button @click.stop="saveEdit()" class="bg-green-500 text-white px-3 py-1 rounded">保存</button>
-                                            <button @click.stop="cancelEdit()" class="bg-gray-500 text-white px-3 py-1 rounded">キャンセル</button>
+                                            <button @click.stop="saveEdit()"
+                                                class="bg-green-500 text-white px-3 py-1 rounded">保存</button>
+                                            <button @click.stop="cancelEdit()"
+                                                class="bg-gray-500 text-white px-3 py-1 rounded">キャンセル</button>
                                         </div>
                                     </template>
                                     <template x-if="editingRecordId !== record.id">
-                                        <button @click.stop="startEditing(record)" class="text-blue-500 underline">編集</button>
+                                        <div class="flex items-center space-x-2">
+                                            <button @click.stop="startEditing(record)"
+                                                class="bg-blue-500 flex font-bold h-6 hover:bg-blue-700 items-center justify-center rounded-md text-white w-6" title="編集">
+                                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor">
+                                                    <path d="M20.7,5.2a1.024,1.024,0,0,0-1.448,0l-8.8,8.8-3.6.8.8-3.6,8.8-8.8a1.024,1.024,0,0,0,0-1.448l-1.2-1.2a1.024,1.024,0,0,0-1.448,0L5.05,9.45,2.025,18.975,11.55,15.95,22.1,5.4Z" />
+                                                </svg>
+                                            </button>
+                                            <button @click.stop="openDeleteModal(record.id)" class="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center font-bold" title="削除">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </template>
                                 </td>
                             </tr>
@@ -182,8 +233,21 @@
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div x-show="showDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-1/3">
+            <h3 class="text-lg font-bold mb-4">レコードの削除</h3>
+            <p class="mb-6" x-text="`備蓄品名: ${recordDetailsToDelete.name}, 数量: ${recordDetailsToDelete.quantity} ${recordDetailsToDelete.unit}, 保管場所: ${recordDetailsToDelete.location} のレコードを本当に削除しますか？`"></p>
+            <div class="flex justify-end space-x-4">
+                <button @click="closeDeleteModal()" class="bg-gray-300 px-4 py-2 rounded">キャンセル</button>
+                <button @click="deleteRecord()" class="bg-red-600 text-white px-4 py-2 rounded">削除</button>
+            </div>
+        </div>
+    </div>
+
     <!-- New Bichikuhin Modal -->
-    <div x-show="showNewBichikuhinModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div x-show="showNewBichikuhinModal"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-lg shadow-xl w-1/3">
             <h3 class="text-lg font-bold mb-4">新規備蓄品登録</h3>
             <div class="mb-4">
@@ -201,7 +265,8 @@
             </div>
             <div class="flex justify-end space-x-4">
                 <button @click="closeNewBichikuhinModal()" class="bg-gray-300 px-4 py-2 rounded">キャンセル</button>
-                <button @click="addNewBichikuhin()" class="bg-blue-600 text-white px-4 py-2 rounded" :disabled="!newBichikuhinUnitId">登録</button>
+                <button @click="addNewBichikuhin()" class="bg-blue-600 text-white px-4 py-2 rounded"
+                    :disabled="!newBichikuhinUnitId">登録</button>
             </div>
         </div>
     </div>
@@ -224,6 +289,11 @@
                 newStocktaking: { name: '', date: '' },
                 editingRecordId: null,
                 editFormData: {},
+
+                // State for delete modal
+                showDeleteModal: false,
+                recordToDeleteId: null,
+                recordDetailsToDelete: { name: '', quantity: '', unit: '', location: '' }, // New state variable
 
                 // New state for the new bichikuhin modal
                 showNewBichikuhinModal: false,
@@ -280,7 +350,7 @@
                     const res = await this.apiFetch(`/api/records/${stocktakingId}`);
                     this.records = await res.json();
                 },
-                
+
                 selectStocktaking(id) {
                     this.selectedStocktakingId = id;
                     this.fetchData(id);
@@ -294,7 +364,7 @@
                     this.masters.locations = data.locations;
                     this.masters.units = data.units;
                 },
-                
+
                 openNewStocktakingForm() {
                     const today = this.getTodayDateString();
                     this.newStocktaking.date = today;
@@ -359,7 +429,7 @@
                         }
                     }
                 },
-                
+
                 openNewBichikuhinModal() {
                     this.newBichikuhinName = this.bichikuhinName;
                     this.showNewBichikuhinModal = true;
@@ -396,7 +466,7 @@
                         return;
                     }
                     this.form.stocktakingId = this.selectedStocktakingId;
-                    
+
                     const method = this.form.id ? 'PUT' : 'POST';
                     await this.apiFetch('/api/records', {
                         method: method,
@@ -423,17 +493,17 @@
                     const originalRecord = this.records.find(r => r.id === this.editFormData.id);
 
                     if (this.editFormData.Bichikuhin.name !== originalRecord.Bichikuhin.name) {
-                         const res = await this.apiFetch(`/api/bichikuhin?name=${encodeURIComponent(this.editFormData.Bichikuhin.name)}`);
-                         if(res.ok) {
+                        const res = await this.apiFetch(`/api/bichikuhin?name=${encodeURIComponent(this.editFormData.Bichikuhin.name)}`);
+                        if (res.ok) {
                             const items = await res.json();
                             const exactMatch = items.find(item => item.name === this.editFormData.Bichikuhin.name);
-                            if(exactMatch) {
+                            if (exactMatch) {
                                 bichikuhinId = exactMatch.id;
                             } else {
                                 alert(`'${this.editFormData.Bichikuhin.name}'は新しい備蓄品です。まず上のフォームから単位を指定して登録してください。`);
                                 return;
                             }
-                         }
+                        }
                     }
 
                     const payload = {
@@ -444,7 +514,7 @@
                         expiryDate: this.editFormData.expiry_date,
                         stocktakingId: this.editFormData.StocktakingId
                     };
-                    
+
                     const res = await this.apiFetch('/api/records', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -457,6 +527,41 @@
                     } else {
                         alert('レコードの更新に失敗しました。');
                     }
+                },
+
+                openDeleteModal(recordId) {
+                    this.recordToDeleteId = recordId;
+                    const record = this.records.find(r => r.id === recordId);
+                    if (record) {
+                        this.recordDetailsToDelete = {
+                            name: record.Bichikuhin?.name || '不明',
+                            quantity: record.quantity || '不明',
+                            unit: record.Bichikuhin?.Unit?.name || '',
+                            location: record.StorageLocation?.name || '不明'
+                        };
+                    }
+                    this.showDeleteModal = true;
+                },
+
+                closeDeleteModal() {
+                    this.recordToDeleteId = null;
+                    this.recordDetailsToDelete = { name: '', quantity: '', unit: '', location: '' }; // Clear details
+                    this.showDeleteModal = false;
+                },
+
+                async deleteRecord() {
+                    if (!this.recordToDeleteId) return;
+
+                    const res = await this.apiFetch(`/api/records/${this.recordToDeleteId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (res.ok) {
+                        await this.fetchData(this.selectedStocktakingId);
+                    } else {
+                        alert('レコードの削除に失敗しました。');
+                    }
+                    this.closeDeleteModal();
                 },
 
                 async logout() {
@@ -473,13 +578,13 @@
 
                 resetForm() {
                     const stocktakingId = this.form.stocktakingId;
-                    this.form = { 
-                        id: null, 
-                        bichikuhinId: '', 
-                        locationId: '', 
-                        quantity: 0, 
+                    this.form = {
+                        id: null,
+                        bichikuhinId: '',
+                        locationId: '',
+                        quantity: 0,
                         expiryDate: '',
-                        stocktakingId: stocktakingId 
+                        stocktakingId: stocktakingId
                     };
                     this.bichikuhinName = '';
                     this.selectedBichikuhin = null;
@@ -499,4 +604,5 @@
         }
     </script>
 </body>
+
 </html>

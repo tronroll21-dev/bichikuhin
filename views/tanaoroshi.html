@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>棚卸モード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100" x-data="tanaoroshiManager()">
+
+    <div class="flex flex-row h-screen">
+
+        <!-- Left Sidebar: Locations -->
+        <div class="w-1/4 bg-white shadow-lg p-1 md:p-4 flex flex-col">
+            <div class="mb-4">
+                <a href="/" class="inline-block text-gray-600 hover:text-gray-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15l-3-3m0 0l3-3m-3 3h8a5 5 0 015 5v0" />
+                    </svg>
+                </a>
+            </div>
+            <h2 class="text-xl font-bold mb-4">保管場所</h2>
+            <ul class="overflow-y-auto flex-grow">
+                <template x-for="loc in locations" :key="loc.id">
+                    <li @click="selectLocation(loc.id)"
+                        :class="{ 'bg-blue-100 font-bold': selectedLocationId == loc.id }"
+                        class="p-3 text-lg hover:bg-gray-100 cursor-pointer rounded">
+                        <span x-text="loc.ryakushou || loc.name"></span>
+                    </li>
+                </template>
+            </ul>
+        </div>
+
+        <!-- Right Content: Stock Records -->
+        <div class="w-3/4 p-2 md:p-8 overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-6" x-text="selectedLocationName"></h2>
+            <div class="bg-white rounded-lg shadow">
+                <div class="hidden md:flex bg-gray-200 p-3 font-bold text-gray-700 rounded-t-lg">
+                    <div class="w-1/2">品名</div>
+                    <div class="w-1/4">数量</div>
+                    <div class="w-1/4 text-right"></div> <!-- For the button -->
+                </div>
+                <div class="divide-y divide-gray-200">
+                    <template x-for="record in records" :key="record.id">
+                        <div class="flex flex-row items-center p-3 hover:bg-gray-50">
+                            <div class="w-1/2 mb-2 md:mb-0">
+                                <span class="font-semibold" x-text="record.Bichikuhin.name"></span>
+                            </div>
+                            <div class="w-1/4 mb-2 md:mb-0">
+                                <span x-text="`${record.quantity} ${record.Bichikuhin.Unit?.name || ''}`"></span>
+                            </div>
+                            <div class="w-1/4 text-right">
+                                <button @click="showDetails(record)" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 w-full md:w-auto">詳細</button>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="records.length === 0">
+                        <div class="p-3 text-center text-gray-500">この場所に備蓄品はありません。</div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div x-show="showModal" @keydown.escape.window="closeModal()" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg" @click.away="closeModal()">
+            <div class="p-6">
+                <h3 class="text-2xl font-bold mb-4" x-text="selectedRecord.Bichikuhin?.name"></h3>
+                <div class="space-y-2">
+                    <p><span class="font-semibold">保管場所:</span> <span x-text="selectedRecord.StorageLocation?.name"></span></p>
+                    <p><span class="font-semibold">数量:</span> <span x-text="`${selectedRecord.quantity} ${selectedRecord.Bichikuhin?.Unit?.name || ''}`"></span></p>
+                    <p><span class="font-semibold">消費期限:</span> <span x-text="selectedRecord.expiry_date || 'N/A'"></span></p>
+                    <p><span class="font-semibold">登録日時:</span> <span x-text="formatDate(selectedRecord.entry_timestamp)"></span></p>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button @click="closeModal()" class="bg-gray-300 px-4 py-2 rounded">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        function tanaoroshiManager() {
+            return {
+                locations: [],
+                records: [],
+                stocktakingId: null,
+                selectedLocationId: null,
+                showModal: false,
+                selectedRecord: {},
+
+                get selectedLocationName() {
+                    const loc = this.locations.find(l => l.id == this.selectedLocationId);
+                    return loc ? loc.name : '場所を選択';
+                },
+
+                async init() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    this.stocktakingId = urlParams.get('id');
+                    if (!this.stocktakingId) {
+                        alert('棚卸IDが指定されていません。');
+                        window.location.href = '/';
+                        return;
+                    }
+
+                    await this.fetchMasters();
+                    this.selectLocation(101); // Default selection
+                },
+
+                async apiFetch(url, options = {}) {
+                    let response = await fetch(url, options);
+                    if (response.status === 401) {
+                        const refreshRes = await fetch('/api/refresh', { method: 'POST' });
+                        if (refreshRes.ok) {
+                            return fetch(url, options);
+                        } else {
+                            window.location.href = '/login';
+                        }
+                    }
+                    return response;
+                },
+
+                async fetchMasters() {
+                    const res = await this.apiFetch('/api/masters');
+                    const data = await res.json();
+                    this.locations = data.locations;
+                },
+
+                async selectLocation(locationId) {
+                    this.selectedLocationId = locationId;
+                    await this.fetchRecords();
+                },
+
+                async fetchRecords() {
+                    if (!this.stocktakingId || !this.selectedLocationId) {
+                        this.records = [];
+                        return;
+                    }
+                    const res = await this.apiFetch(`/api/tanaoroshi/records?stocktakingId=${this.stocktakingId}&locationId=${this.selectedLocationId}`);
+                    if (res.ok) {
+                        this.records = await res.json();
+                    } else {
+                        console.error('Failed to fetch records');
+                        this.records = [];
+                    }
+                },
+
+                showDetails(record) {
+                    this.selectedRecord = record;
+                    this.showModal = true;
+                },
+
+                closeModal() {
+                    this.showModal = false;
+                    this.selectedRecord = {};
+                },
+
+                formatDate(dateStr, options = {}) {
+                    if (!dateStr) return '';
+                    const defaultOptions = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+                    const mergedOptions = { ...defaultOptions, ...options };
+                    return new Date(dateStr).toLocaleString('ja-JP', mergedOptions);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

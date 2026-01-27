@@ -3,7 +3,7 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { sequelize, User, StorageLocation, Bichikuhin, StockRecord, Unit, Stocktaking } = require('./models');
+const { sequelize, User, RefreshToken, StorageLocation, Bichikuhin, StockRecord, Unit, Stocktaking } = require('./models');
 const path = require('path');
 
 const app = express();
@@ -38,9 +38,17 @@ const authenticateToken = (req, res, next) => {
 };
 
 // --- トークン生成ヘルパー ---
-const generateTokens = (user) => {
+const generateTokens = async (user) => {
     const accessToken = jwt.sign({ id: user.id, name: user.name, role: user.role }, ACCESS_SECRET, { expiresIn: '5m' });
-    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+    let refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+
+    // Ensure refresh token is unique in the database
+    let existingRefreshToken = await RefreshToken.findOne({ where: { token: refreshToken } });
+    while (existingRefreshToken) {
+        refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+        existingRefreshToken = await RefreshToken.findOne({ where: { token: refreshToken } });
+    }
+    
     return { accessToken, refreshToken };
 };
 
@@ -60,17 +68,28 @@ app.get('/change_password', authenticateToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'change_password.html'));
 });
 
+app.get('/tanaoroshi', authenticateToken, (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'tanaoroshi.html'));
+});
+
+app.get('/print_preview', authenticateToken, (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'print_preview.html'));
+});
+
 // 3. ログイン実行API
 app.post('/api/login', async (req, res) => {
     const { name, password } = req.body;
     const user = await User.findOne({ where: { name } });
 
     if (user && await bcrypt.compare(password, user.password)) {
-        const { accessToken, refreshToken } = generateTokens(user);
+        const { accessToken, refreshToken } = await generateTokens(user); // Await the async function
+        
+        // Store refresh token in DB
+        await RefreshToken.create({ token: refreshToken, UserId: user.id });
         
         // クッキーに保存 (セキュリティのためHttpOnlyを推奨)
         res.cookie('accessToken', accessToken, { httpOnly: true });
-        res.cookie('refreshToken', refreshToken, { httpOnly: true });
+        res.cookie('refreshToken', refreshToken, { httpOnly: true }); // Use the unique refreshToken
         
         return res.json({ success: true });
     }
@@ -103,15 +122,27 @@ app.post('/api/register', async (req, res) => {
 });
 
 // 4. トークンリフレッシュAPI
-app.post('/api/refresh', (req, res) => {
-    const refreshToken = req.cookies.refreshToken;
-    if (!refreshToken) return res.sendStatus(401);
+app.post('/api/refresh', async (req, res) => { // Make it async
+    const oldRefreshToken = req.cookies.refreshToken; // Rename for clarity
+    if (!oldRefreshToken) return res.sendStatus(401);
 
-    jwt.verify(refreshToken, REFRESH_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
+    const storedRefreshToken = await RefreshToken.findOne({ where: { token: oldRefreshToken } });
+    if (!storedRefreshToken) return res.sendStatus(403); // Token not found in DB
+
+    jwt.verify(oldRefreshToken, REFRESH_SECRET, async (err, user) => { // Make callback async
+        if (err) {
+            await RefreshToken.destroy({ where: { token: oldRefreshToken } }); // Delete invalid token
+            return res.sendStatus(403);
+        }
         
-        const accessToken = jwt.sign({ id: user.id }, ACCESS_SECRET, { expiresIn: '5m' });
+        // Generate new access and refresh tokens
+        const { accessToken, refreshToken } = await generateTokens(user); // Use generateTokens
+
+        // Update the refresh token in the database
+        await storedRefreshToken.update({ token: refreshToken }); // Update existing record
+
         res.cookie('accessToken', accessToken, { httpOnly: true });
+        res.cookie('refreshToken', refreshToken, { httpOnly: true }); // Set new refresh token
         res.json({ success: true });
     });
 });
@@ -123,6 +154,19 @@ app.get('/api/stocktakings', authenticateToken, async (req, res) => {
             order: [['date', 'DESC']]
         });
         res.json(stocktakings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/stocktakings/:id', authenticateToken, async (req, res) => {
+    try {
+        const stocktaking = await Stocktaking.findByPk(req.params.id);
+        if (stocktaking) {
+            res.json(stocktaking);
+        } else {
+            res.status(404).json({ error: 'Stocktaking not found' });
+        }
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -211,10 +255,36 @@ app.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
         const records = await StockRecord.findAll({
             where: { StocktakingId: stocktakingId, kubun: 1 },
             include: [{ model: Bichikuhin, include: [Unit] }, StorageLocation],
+            order: [[StorageLocation, 'id', 'ASC'], [Bichikuhin, 'id', 'ASC']]
+        });
+        res.json(records);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/tanaoroshi/records', authenticateToken, async (req, res) => {
+    try {
+        const { stocktakingId, locationId } = req.query;
+        if (!stocktakingId || !locationId) {
+            return res.status(400).json({ error: 'stocktakingId and locationId are required' });
+        }
+
+        const records = await StockRecord.findAll({
+            where: {
+                StocktakingId: stocktakingId,
+                StorageLocationId: locationId,
+                kubun: 1
+            },
+            include: [
+                { model: Bichikuhin, include: [Unit] },
+                StorageLocation
+            ],
             order: [['entry_timestamp', 'DESC']]
         });
         res.json(records);
     } catch (err) {
+        console.error('Error fetching tanaoroshi records:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -255,6 +325,23 @@ const recordHandler = async (req, res) => {
 
 app.post('/api/records', authenticateToken, recordHandler);
 app.put('/api/records', authenticateToken, recordHandler);
+
+app.delete('/api/records/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await StockRecord.update(
+            { kubun: 0 }, // Soft delete by changing kubun
+            { where: { id: id } }
+        );
+        if (result[0] > 0) { // check if any row was updated
+            res.json({ success: true, message: 'Record deleted successfully.' });
+        } else {
+            res.status(404).json({ success: false, message: 'Record not found.' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // 8. 備蓄品検索API
 app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
@@ -365,7 +452,11 @@ app.put('/api/users/:id/password', async (req, res) => {
     }
 });
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', async (req, res) => { // Make it async
+    const refreshToken = req.cookies.refreshToken;
+    if (refreshToken) {
+        await RefreshToken.destroy({ where: { token: refreshToken } });
+    }
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
     res.json({ success: true });
