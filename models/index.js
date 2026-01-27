@@ -24,10 +24,18 @@ const sequelize = new Sequelize(
 // ユーザーテーブル
 const User = sequelize.define('User', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    name: { type: DataTypes.STRING, allowNull: false, unique: true },
+    name: { type: DataTypes.STRING, allowNull: false }, // Removed unique: true from here
     name_jp: { type: DataTypes.STRING, allowNull: true },
     role: { type: DataTypes.STRING },
     password: { type: DataTypes.STRING, allowNull: false }
+}, {
+  indexes: [
+    {
+      unique: true,
+      fields: ['name'],
+      name: 'users_name_unique' // Explicitly naming the constraint
+    }
+  ]
 });
 
 const RefreshToken = sequelize.define('RefreshToken', {
@@ -35,10 +43,6 @@ const RefreshToken = sequelize.define('RefreshToken', {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
-    },
-    userId: { // Changed to UserId to match Sequelize's default foreign key naming
-        type: DataTypes.INTEGER,
-        allowNull: false,
     },
 });
 
