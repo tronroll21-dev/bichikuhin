@@ -138,21 +138,22 @@
                     <thead>
                         <tr class="bg-gray-200 text-left sticky top-0">
                             <!-- <th class="p-3">登録日時</th> -->
-                            <th class="p-3">品名</th>
-                            <th class="p-3">場所</th>
-                            <th class="p-3">数量</th>
-                            <th class="p-3">消費期限</th>
-                            <th class="p-3 print:hidden">操作</th>
+                            <th class="p-2 w-1/4">品名</th>
+                            <th class="p-2 w-1/4">場所</th>
+                            <th class="p-2 w-20">数量</th>
+                            <th class="p-2 w-1/4">消費期限</th>
+                            <th class="p-2 w-1/4">備考</th>
+                            <th class="p-2 print:hidden" x-show="isSelectedStocktakingActive === true">操作</th>
                         </tr>
                     </thead>
                     <tbody>
                         <template x-for="record in records" :key="record.id">
                             <tr class.bind="'border-t ' + (editingRecordId === record.id ? 'bg-yellow-50' : 'hover:bg-gray-50 cursor-pointer')"
-                                @click="editingRecordId !== record.id ? startEditing(record) : null">
+                                @click="(editingRecordId !== record.id && isSelectedStocktakingActive) ? startEditing(record) : null">
 
                                 <!-- <td class="p-3" x-text="formatDate(record.entry_timestamp)"></td> -->
 
-                                <td class="p-3">
+                                <td class="p-2">
                                     <template x-if="editingRecordId !== record.id">
                                         <span x-text="record.Bichikuhin?.name"></span>
                                     </template>
@@ -162,21 +163,21 @@
                                     </template>
                                 </td>
 
-                                <td class="p-3">
+                                <td class="p-2">
                                     <template x-if="editingRecordId !== record.id">
-                                        <span x-text="record.StorageLocation?.name"></span>
+                                        <span x-text="String(record.StorageLocation?.id).replace('0','-') + ' - ' + record.StorageLocation?.name"></span>
                                     </template>
                                     <template x-if="editingRecordId === record.id">
                                         <select x-model="editFormData.StorageLocationId" @click.stop
                                             class="border p-1 rounded w-full">
                                             <template x-for="loc in masters.locations">
-                                                <option :value="loc.id" x-text="loc.name"></option>
+                                                <option :value="loc.id" x-text="String(loc.id).replace('0','-') + ' - ' + loc.name"></option>
                                             </template>
                                         </select>
                                     </template>
                                 </td>
 
-                                <td class="p-3">
+                                <td class="p-2 text-right">
                                     <template x-if="editingRecordId !== record.id">
                                         <span
                                             x-text="`${record.quantity} ${record.Bichikuhin?.Unit?.name || ''}`"></span>
@@ -190,7 +191,7 @@
                                     </template>
                                 </td>
 
-                                <td class="p-3">
+                                <td class="p-2">
                                     <template x-if="editingRecordId !== record.id">
                                         <span x-text="record.expiry_date"></span>
                                     </template>
@@ -200,7 +201,17 @@
                                     </template>
                                 </td>
 
-                                <td class="p-3 print:hidden">
+                                <td class="p-2">
+                                    <template x-if="editingRecordId !== record.id">
+                                        <span x-text="record.bikou"></span>
+                                    </template>
+                                    <template x-if="editingRecordId === record.id">
+                                        <input type="text" x-model="editFormData.bikou" @click.stop
+                                            class="border p-1 rounded w-full">
+                                    </template>
+                                </td>
+
+                                <td class="p-2 print:hidden" x-show="isSelectedStocktakingActive === true">
                                     <template x-if="editingRecordId === record.id">
                                         <div class="flex space-x-2">
                                             <button @click.stop="saveEdit()"
@@ -356,6 +367,11 @@
                     this.fetchData(id);
                     this.showNewStocktakingForm = false;
                     this.resetForm();
+                },
+
+                get isSelectedStocktakingActive() {
+                    const selected = this.stocktakings.find(s => s.id === this.selectedStocktakingId);
+                    return selected ? selected.active : false;
                 },
 
                 async fetchMasters() {

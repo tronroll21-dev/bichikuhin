@@ -24,26 +24,10 @@ const sequelize = new Sequelize(
 // ユーザーテーブル
 const User = sequelize.define('User', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    name: { type: DataTypes.STRING, allowNull: false }, // Removed unique: true from here
+    name: { type: DataTypes.STRING, allowNull: false, unique: true },
     name_jp: { type: DataTypes.STRING, allowNull: true },
     role: { type: DataTypes.STRING },
     password: { type: DataTypes.STRING, allowNull: false }
-}, {
-  indexes: [
-    {
-      unique: true,
-      fields: ['name'],
-      name: 'users_name_unique' // Explicitly naming the constraint
-    }
-  ]
-});
-
-const RefreshToken = sequelize.define('RefreshToken', {
-    token: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-    },
 });
 
 // 保管場所マスター
@@ -70,10 +54,8 @@ const StockRecord = sequelize.define('StockRecord', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     kubun: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
-    expiry_date: { 
-        type: DataTypes.DATEONLY, 
-        allowNull: true 
-    },
+    expiry_date: { type: DataTypes.DATEONLY, allowNull: true },
+    bikou: { type: DataTypes.STRING, allowNull: false },
     entry_timestamp: { 
         type: DataTypes.DATE, 
         defaultValue: Sequelize.NOW 
@@ -81,9 +63,6 @@ const StockRecord = sequelize.define('StockRecord', {
 });
 
 // --- リレーション（関連付け）の設定 ---
-
-User.hasMany(RefreshToken);
-RefreshToken.belongsTo(User);
 
 /* StockRecord は Bichikuhin と StorageLocation に属します。
    これにより StockRecord.findAll({ include: [...] }) が可能になります。
@@ -118,7 +97,6 @@ StockRecord.belongsTo(Stocktaking);
 module.exports = {
     sequelize,
     User,
-    RefreshToken,
     StorageLocation,
     Bichikuhin,
     StockRecord,

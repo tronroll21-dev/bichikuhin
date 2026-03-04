@@ -190,17 +190,18 @@
                     table.innerHTML = `
                         <thead class="bg-gray-100">
                             <tr>
-                                <th class="px-1 py-[0.13rem] border text-left w-1/2">品名</th>
-                                <th class="px-1 py-[0.13rem] border text-left w-1/4">消費期限</th>
-                                <th class="px-1 py-[0.13rem] border text-left w-1/4">数量</th>
+                                <th class="px-1 py-[0.13rem] border text-center">品名</th>
+                                <th class="px-1 py-[0.13rem] border text-center">消費期限</th>
+                                <th class="px-1 py-[0.13rem] border text-center">数量</th>
+                                <th class="px-1 py-[0.13rem] border text-center">備考</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     `;
                     return table;
-                },
-
-                createLocationHeader(locationName, locationId) {
+                },// w-1/2
+// w-1/4
+                createLocationHeader(locationName, locationId) {// w-1/4
                     let formattedLocationId = '';
                     if (locationId && typeof locationId === 'number') { // Ensure ID is a number
                         formattedLocationId = String(locationId).padStart(3, '0'); // Ensure 3 digits
@@ -211,7 +212,7 @@
                         }
                     }
                     const headerRow = document.createElement('tr');
-                    headerRow.innerHTML = `<td colspan="3" class="px-1 py-[0.05rem] font-bold text-base bg-gray-200 border">${locationName} (${formattedLocationId})</td>`;
+                    headerRow.innerHTML = `<td colspan="4" class="px-1 py-[0.05rem] font-bold text-base bg-gray-200 border">${locationName} (${formattedLocationId})</td>`;
                     return headerRow;
                 },
 
@@ -221,7 +222,8 @@
                     row.innerHTML = `
                         <td class="py-[0.13rem] px-1 border">${record.Bichikuhin?.name || ''}</td>
                         <td class="py-[0.13rem] px-1 border">${this.formatDate(record.expiry_date)}</td>
-                        <td class="py-[0.13rem] px-1 border">${quantity}</td>
+                        <td class="py-[0.13rem] px-1 border text-right">${quantity}</td>
+                        <td class="py-[0.13rem] px-1 border">${record.bikou}</td>
                     `;
                     return row;
                 },

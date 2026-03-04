@@ -3,7 +3,7 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { sequelize, User, RefreshToken, StorageLocation, Bichikuhin, StockRecord, Unit, Stocktaking } = require('./models');
+const { sequelize, User, StorageLocation, Bichikuhin, StockRecord, Unit, Stocktaking } = require('./models');
 const path = require('path');
 
 const app = express();
@@ -38,17 +38,9 @@ const authenticateToken = (req, res, next) => {
 };
 
 // --- トークン生成ヘルパー ---
-const generateTokens = async (user) => {
+const generateTokens = (user) => {
     const accessToken = jwt.sign({ id: user.id, name: user.name, role: user.role }, ACCESS_SECRET, { expiresIn: '5m' });
-    let refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
-
-    // Ensure refresh token is unique in the database
-    let existingRefreshToken = await RefreshToken.findOne({ where: { token: refreshToken } });
-    while (existingRefreshToken) {
-        refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
-        existingRefreshToken = await RefreshToken.findOne({ where: { token: refreshToken } });
-    }
-    
+    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
     return { accessToken, refreshToken };
 };
 
@@ -82,14 +74,11 @@ app.post('/api/login', async (req, res) => {
     const user = await User.findOne({ where: { name } });
 
     if (user && await bcrypt.compare(password, user.password)) {
-        const { accessToken, refreshToken } = await generateTokens(user); // Await the async function
-        
-        // Store refresh token in DB
-        await RefreshToken.create({ token: refreshToken, UserId: user.id });
+        const { accessToken, refreshToken } = generateTokens(user);
         
         // クッキーに保存 (セキュリティのためHttpOnlyを推奨)
         res.cookie('accessToken', accessToken, { httpOnly: true });
-        res.cookie('refreshToken', refreshToken, { httpOnly: true }); // Use the unique refreshToken
+        res.cookie('refreshToken', refreshToken, { httpOnly: true });
         
         return res.json({ success: true });
     }
@@ -122,27 +111,15 @@ app.post('/api/register', async (req, res) => {
 });
 
 // 4. トークンリフレッシュAPI
-app.post('/api/refresh', async (req, res) => { // Make it async
-    const oldRefreshToken = req.cookies.refreshToken; // Rename for clarity
-    if (!oldRefreshToken) return res.sendStatus(401);
+app.post('/api/refresh', (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) return res.sendStatus(401);
 
-    const storedRefreshToken = await RefreshToken.findOne({ where: { token: oldRefreshToken } });
-    if (!storedRefreshToken) return res.sendStatus(403); // Token not found in DB
-
-    jwt.verify(oldRefreshToken, REFRESH_SECRET, async (err, user) => { // Make callback async
-        if (err) {
-            await RefreshToken.destroy({ where: { token: oldRefreshToken } }); // Delete invalid token
-            return res.sendStatus(403);
-        }
+    jwt.verify(refreshToken, REFRESH_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
         
-        // Generate new access and refresh tokens
-        const { accessToken, refreshToken } = await generateTokens(user); // Use generateTokens
-
-        // Update the refresh token in the database
-        await storedRefreshToken.update({ token: refreshToken }); // Update existing record
-
+        const accessToken = jwt.sign({ id: user.id }, ACCESS_SECRET, { expiresIn: '5m' });
         res.cookie('accessToken', accessToken, { httpOnly: true });
-        res.cookie('refreshToken', refreshToken, { httpOnly: true }); // Set new refresh token
         res.json({ success: true });
     });
 });
@@ -230,13 +207,22 @@ app.get('/api/records/expired', async (req, res) => {
             return res.json([]);
         }
 
+        /* 期限が今日から3ヶ月以内のものを取得 
+        */
+        const today = new Date();
+        const targetDate = new Date();
+        targetDate.setMonth(today.getMonth() + 3);
+
+        // YYYY-MM-DD 形式の文字列に変換
+        const targetDateString = targetDate.toISOString().split('T')[0];
+
         const records = await StockRecord.findAll({
             where: { 
                 StocktakingId: activeStocktaking.id,
                 kubun: 1,
                 expiry_date: {
                     [Op.ne]: null,
-                    [Op.lt]: new Date()
+                    [Op.lt]: targetDateString
                 }
             },
             include: [{ model: Bichikuhin, include: [Unit] }, StorageLocation],
@@ -452,11 +438,7 @@ app.put('/api/users/:id/password', async (req, res) => {
     }
 });
 
-app.post('/api/logout', async (req, res) => { // Make it async
-    const refreshToken = req.cookies.refreshToken;
-    if (refreshToken) {
-        await RefreshToken.destroy({ where: { token: refreshToken } });
-    }
+app.post('/api/logout', (req, res) => {
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
     res.json({ success: true });
