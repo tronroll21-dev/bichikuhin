@@ -56,12 +56,12 @@ const StockRecord = sequelize.define('StockRecord', {
     quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     expiry_date: { type: DataTypes.DATEONLY, allowNull: true },
     bikou: { type: DataTypes.STRING, allowNull: false },
+    taishozumi: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     entry_timestamp: { 
         type: DataTypes.DATE, 
         defaultValue: Sequelize.NOW 
     }
 });
-
 // --- リレーション（関連付け）の設定 ---
 
 /* StockRecord は Bichikuhin と StorageLocation に属します。

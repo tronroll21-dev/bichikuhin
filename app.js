@@ -1,4 +1,5 @@
 const express = require('express');
+const vhost = require('vhost');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -6,16 +7,16 @@ const { Op } = require('sequelize');
 const { sequelize, User, StorageLocation, Bichikuhin, StockRecord, Unit, Stocktaking } = require('./models');
 const path = require('path');
 
-const app = express();
+const  bichikuhinkanri = express();
 
 // --- 設定 ---
 const ACCESS_SECRET = process.env.ACCESS_SECRET || 'access_secret_123';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'refresh_secret_456';
 const PORT = 3000;
 
-app.use(express.json());
-app.use(cookieParser());
-app.use(express.static('public'));
+bichikuhinkanri.use(express.json());
+bichikuhinkanri.use(cookieParser());
+bichikuhinkanri.use(express.static('public'));
 
 // --- 認証ミドルウェア ---
 const authenticateToken = (req, res, next) => {
@@ -47,29 +48,29 @@ const generateTokens = (user) => {
 // --- ルート設定 ---
 
 // 1. ルート（備蓄品一覧）
-app.get('/', authenticateToken, (req, res) => {
+bichikuhinkanri.get('/', authenticateToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
 // 2. ログインページ
-app.get('/login', (req, res) => {
+bichikuhinkanri.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
-app.get('/change_password', authenticateToken, (req, res) => {
+bichikuhinkanri.get('/change_password', authenticateToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'change_password.html'));
 });
 
-app.get('/tanaoroshi', authenticateToken, (req, res) => {
+bichikuhinkanri.get('/tanaoroshi', authenticateToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'tanaoroshi.html'));
 });
 
-app.get('/print_preview', authenticateToken, (req, res) => {
+bichikuhinkanri.get('/print_preview', authenticateToken, (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'print_preview.html'));
 });
 
 // 3. ログイン実行API
-app.post('/api/login', async (req, res) => {
+bichikuhinkanri.post('/api/login', async (req, res) => {
     const { name, password } = req.body;
     const user = await User.findOne({ where: { name } });
 
@@ -86,7 +87,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // 新規ユーザー登録API
-app.post('/api/register', async (req, res) => {
+bichikuhinkanri.post('/api/register', async (req, res) => {
     const { name, password } = req.body;
 
     if (!name || !password) {
@@ -111,7 +112,7 @@ app.post('/api/register', async (req, res) => {
 });
 
 // 4. トークンリフレッシュAPI
-app.post('/api/refresh', (req, res) => {
+bichikuhinkanri.post('/api/refresh', (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) return res.sendStatus(401);
 
@@ -125,7 +126,7 @@ app.post('/api/refresh', (req, res) => {
 });
 
 // 5. 棚卸データ取得API
-app.get('/api/stocktakings', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/stocktakings', authenticateToken, async (req, res) => {
     try {
         const stocktakings = await Stocktaking.findAll({
             order: [['date', 'DESC']]
@@ -136,7 +137,7 @@ app.get('/api/stocktakings', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/stocktakings/:id', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/stocktakings/:id', authenticateToken, async (req, res) => {
     try {
         const stocktaking = await Stocktaking.findByPk(req.params.id);
         if (stocktaking) {
@@ -149,7 +150,7 @@ app.get('/api/stocktakings/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/stocktakings', authenticateToken, async (req, res) => {
+bichikuhinkanri.post('/api/stocktakings', authenticateToken, async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { name, date, copyFromId } = req.body;
@@ -193,7 +194,7 @@ app.post('/api/stocktakings', authenticateToken, async (req, res) => {
 });
 
 // GET expired records from active stocktaking
-app.get('/api/records/expired', async (req, res) => {
+bichikuhinkanri.get('/api/records/expired', async (req, res) => {
     // セキュリティ：簡易的なAPIキーチェック（.envに定義）
     const apiKey = req.headers['x-api-key'];
     if (apiKey !== process.env.CRON_API_KEY) {
@@ -223,7 +224,8 @@ app.get('/api/records/expired', async (req, res) => {
                 expiry_date: {
                     [Op.ne]: null,
                     [Op.lt]: targetDateString
-                }
+                },
+                taishozumi: false
             },
             include: [{ model: Bichikuhin, include: [Unit] }, StorageLocation],
             order: [['expiry_date', 'ASC']]
@@ -235,7 +237,7 @@ app.get('/api/records/expired', async (req, res) => {
 });
 
 // 5. 備蓄品データ取得API
-app.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
     try {
         const { stocktakingId } = req.params;
         const records = await StockRecord.findAll({
@@ -249,7 +251,7 @@ app.get('/api/records/:stocktakingId', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/tanaoroshi/records', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/tanaoroshi/records', authenticateToken, async (req, res) => {
     try {
         const { stocktakingId, locationId } = req.query;
         if (!stocktakingId || !locationId) {
@@ -276,7 +278,7 @@ app.get('/api/tanaoroshi/records', authenticateToken, async (req, res) => {
 });
 
 // 6. マスターデータ取得（フロントエンドのセレクトボックス用）
-app.get('/api/masters', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/masters', authenticateToken, async (req, res) => {
     const locations = await StorageLocation.findAll();
     const units = await Unit.findAll();
     res.json({ locations, units });
@@ -285,11 +287,11 @@ app.get('/api/masters', authenticateToken, async (req, res) => {
 // 7. 新規登録/更新API
 const recordHandler = async (req, res) => {
     try {
-        const { id, bichikuhinId, locationId, quantity, expiryDate, stocktakingId } = req.body;
+        const { id, bichikuhinId, locationId, quantity, expiryDate, stocktakingId, taishozumi, bikou } = req.body;
         if (id) {
             // 更新
             await StockRecord.update(
-                { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, StocktakingId: stocktakingId },
+                { BichikuhinId: bichikuhinId, StorageLocationId: locationId, quantity, expiry_date: expiryDate, StocktakingId: stocktakingId, taishozumi, bikou },
                 { where: { id: id, kubun: 1 } }
             );
         } else {
@@ -300,6 +302,8 @@ const recordHandler = async (req, res) => {
                 quantity,
                 expiry_date: expiryDate,
                 StocktakingId: stocktakingId,
+                taishozumi,
+                bikou,
                 kubun: 1
             });
         }
@@ -309,10 +313,10 @@ const recordHandler = async (req, res) => {
     }
 };
 
-app.post('/api/records', authenticateToken, recordHandler);
-app.put('/api/records', authenticateToken, recordHandler);
+bichikuhinkanri.post('/api/records', authenticateToken, recordHandler);
+bichikuhinkanri.put('/api/records', authenticateToken, recordHandler);
 
-app.delete('/api/records/:id', authenticateToken, async (req, res) => {
+bichikuhinkanri.delete('/api/records/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const result = await StockRecord.update(
@@ -330,7 +334,7 @@ app.delete('/api/records/:id', authenticateToken, async (req, res) => {
 });
 
 // 8. 備蓄品検索API
-app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/bichikuhin', authenticateToken, async (req, res) => {
     const { name } = req.query;
     if (!name) {
         return res.json([]);
@@ -351,7 +355,7 @@ app.get('/api/bichikuhin', authenticateToken, async (req, res) => {
 });
 
 // 9. 備蓄品登録API
-app.post('/api/bichikuhin', authenticateToken, async (req, res) => {
+bichikuhinkanri.post('/api/bichikuhin', authenticateToken, async (req, res) => {
     const { name, unitId } = req.body;
     if (!name) {
         return res.status(400).json({ error: 'Name is required' });
@@ -365,7 +369,7 @@ app.post('/api/bichikuhin', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/user', authenticateToken, async (req, res) => {
+bichikuhinkanri.get('/api/user', authenticateToken, async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
         if (!user) {
@@ -378,7 +382,7 @@ app.get('/api/user', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/change_password', authenticateToken, async (req, res) => {
+bichikuhinkanri.post('/api/change_password', authenticateToken, async (req, res) => {
     const { oldPassword, newPassword } = req.body;
     const userId = req.user.id;
 
@@ -414,7 +418,7 @@ const isAdmin = (req, res, next) => {
     next();
 };
 
-app.put('/api/users/:id/password', async (req, res) => {
+bichikuhinkanri.put('/api/users/:id/password', async (req, res) => {
     const { id } = req.params;
     const { password } = req.body;
 
@@ -438,11 +442,15 @@ app.put('/api/users/:id/password', async (req, res) => {
     }
 });
 
-app.post('/api/logout', (req, res) => {
+bichikuhinkanri.post('/api/logout', (req, res) => {
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
     res.json({ success: true });
 });
+
+const app = express();
+
+app.use(vhost('bichikuhinkanri', bichikuhinkanri));
 
 // --- データベース同期とサーバー起動 ---
 sequelize.sync({ alter: true }).then(async () => {

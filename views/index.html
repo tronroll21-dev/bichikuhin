@@ -46,7 +46,7 @@
         <div class="w-1/4 print:hidden">
             <div class="bg-white p-4 rounded shadow flex flex-col" style="height: calc(100vh - 100px);">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold">棚卸一覧</h2>
+                    <h2 class="text-xl font-bold">棚卸一覧 local</h2>
                     <button @click="openNewStocktakingForm()"
                         class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600">
                         <span class="font-bold text-xl">+</span>
@@ -142,6 +142,7 @@
                             <th class="p-2 w-1/4">場所</th>
                             <th class="p-2 w-20">数量</th>
                             <th class="p-2 w-1/4">消費期限</th>
+                            <th class="p-2 w-1/4">対処済</th>
                             <th class="p-2 w-1/4">備考</th>
                             <th class="p-2 print:hidden" x-show="isSelectedStocktakingActive === true">操作</th>
                         </tr>
@@ -163,7 +164,7 @@
                                     </template>
                                 </td>
 
-                                <td class="p-2">
+                                <td class="p-2 whitespace-nowrap">
                                     <template x-if="editingRecordId !== record.id">
                                         <span x-text="String(record.StorageLocation?.id).replace('0','-') + ' - ' + record.StorageLocation?.name"></span>
                                     </template>
@@ -197,6 +198,16 @@
                                     </template>
                                     <template x-if="editingRecordId === record.id">
                                         <input type="date" x-model="editFormData.expiry_date" @click.stop
+                                            class="border p-1 rounded w-full">
+                                    </template>
+                                </td>
+
+                                <td class="p-2">
+                                    <template x-if="editingRecordId !== record.id">
+                                        <input type="checkbox" :checked="record.taishozumi" disabled>
+                                    </template>
+                                    <template x-if="editingRecordId === record.id">
+                                        <input type="checkbox" x-model="editFormData.taishozumi" @click.stop
                                             class="border p-1 rounded w-full">
                                     </template>
                                 </td>
@@ -528,7 +539,9 @@
                         locationId: this.editFormData.StorageLocationId,
                         quantity: this.editFormData.quantity,
                         expiryDate: this.editFormData.expiry_date,
-                        stocktakingId: this.editFormData.StocktakingId
+                        bikou: this.editFormData.bikou,
+                        stocktakingId: this.editFormData.StocktakingId,
+                        taishozumi: this.editFormData.taishozumi
                     };
 
                     const res = await this.apiFetch('/api/records', {
