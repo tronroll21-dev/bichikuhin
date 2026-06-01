@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>会議室サイネージ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:         #111210;
+      --surface:    #1a1c19;
+      --border:     #2a2d28;
+      --text:       #e8e6df;
+      --muted:      #6b6e65;
+      --free:       #3ecfb2;
+      --soon:       #e8a838;
+      --busy:       #e85438;
+      --bar-w:      10px;
+
+      --status-color: var(--free);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans JP', sans-serif;
+    }
+
+    /* Fine grid texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Left status bar */
+    .status-bar {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: var(--bar-w);
+      background: var(--status-color);
+      z-index: 10;
+      transition: background 1s ease;
+    }
+    .status-bar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 40%);
+    }
+
+    /* Main layout */
+    .screen {
+      position: relative;
+      z-index: 1;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 2.5vw 2.5vw 2.5vw calc(var(--bar-w) + 2.5vw);
+      gap: 2vw;
+    }
+
+    /* ── Header ───────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding-bottom: 1.5vw;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .room-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 12vw;
+      line-height: 1.1;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      /* Cutout effect on first character */
+      background: linear-gradient(135deg, #ffffff 0%, #9ca89a 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.5vw;
+      padding-top: 0.5vw;
+    }
+
+    .clock {
+      font-family: 'DM Mono', monospace;
+      font-size: 5vw;
+      font-weight: 300;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .date-str {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.6vw;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Status badge ─────────────────────────────────── */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6vw;
+      padding: 0.4vw 1.1vw;
+      border-radius: 99px;
+      border: 1.5px solid var(--status-color);
+      color: var(--status-color);
+      font-size: 1.4vw;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      transition: border-color 1s, color 1s;
+      margin-top: 0.8vw;
+    }
+    .status-dot {
+      width: 0.7vw;
+      height: 0.7vw;
+      border-radius: 50%;
+      background: var(--status-color);
+      transition: background 1s;
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+
+    /* ── Timeline ─────────────────────────────────────── */
+    .timeline-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5vw;
+      overflow: hidden;
+    }
+
+    .section-label {
+      font-size: 1.1vw;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 400;
+    }
+
+    .timeline-track {
+      position: relative;
+      height: 6vw;
+      background: var(--surface);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* Hour tick marks */
+    .tick {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 1px;
+      background: var(--border);
+    }
+    .tick-label {
+      position: absolute;
+      bottom: 0.4vw;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.9vw;
+      color: var(--muted);
+      transform: translateX(-50%);
+    }
+
+    /* Now indicator */
+    .now-line {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: var(--status-color);
+      transition: left 60s linear, background 1s;
+      z-index: 3;
+    }
+    .now-line::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--status-color);
+      transition: background 1s;
+    }
+
+    /* Reservation blocks on timeline */
+    .res-bar {
+      position: absolute;
+      top: 15%; bottom: 15%;
+      border-radius: 4px;
+      background: var(--accent, #3ecfb2);
+      opacity: 0.85;
+      display: flex;
+      align-items: center;
+      padding: 0 0.8vw;
+      font-size: 1vw;
+      font-weight: 500;
+      color: #0d1210;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      animation: barIn 0.4s ease both;
+    }
+    @keyframes barIn {
+      from { opacity: 0; transform: scaleX(0.85); transform-origin: left; }
+      to   { opacity: 0.85; transform: scaleX(1); }
+    }
+
+    /* ── Reservation list ─────────────────────────────── */
+    .res-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1vw;
+    }
+
+    .res-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 1.5vw;
+      padding: 1.2vw 1.5vw;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      animation: itemIn 0.35s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+    .res-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--item-accent, var(--free));
+      border-radius: 3px 0 0 3px;
+    }
+    @keyframes itemIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .res-item.current { border-color: rgba(62,207,178,0.3); background: rgba(62,207,178,0.05); }
+    .res-item.current { --item-accent: var(--free); }
+    .res-item.upcoming { --item-accent: var(--muted); }
+
+    .res-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.8vw;
+      font-weight: 400;
+      color: var(--text);
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .res-time span {
+      display: block;
+      font-size: 1vw;
+      color: var(--muted);
+      margin-top: 0.2vw;
+    }
+
+    .res-person {
+      font-size: 1.6vw;
+      font-weight: 400;
+      color: var(--text);
+    }
+    .res-dept {
+      font-size: 1vw;
+      color: var(--muted);
+      margin-top: 0.2vw;
+    }
+
+    .res-chip {
+      font-size: 0.95vw;
+      padding: 0.3vw 0.8vw;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+      font-family: 'DM Mono', monospace;
+    }
+    .res-chip.now {
+      border-color: var(--free);
+      color: var(--free);
+    }
+
+    /* ── Footer ───────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 1.5vw;
+      border-top: 1px solid var(--border);
+    }
+    .footer-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2vw;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+    }
+    .connection-dot {
+      width: 0.6vw; height: 0.6vw;
+      border-radius: 50%;
+      background: var(--free);
+      display: inline-block;
+      margin-right: 0.5vw;
+      animation: pulse 3s ease-in-out infinite;
+    }
+    .connection-dot.offline { background: var(--busy); animation: none; }
+    .footer-status {
+      font-family: 'DM Mono', monospace;
+      font-size: 1vw;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+    }
+
+    /* ── Empty state ──────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 1vw;
+      opacity: 0.35;
+    }
+    .empty-icon {
+      font-size: 5vw;
+      line-height: 1;
+    }
+    .empty-text {
+      font-size: 1.4vw;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    /* Page-load reveal */
+    .screen > * {
+      animation: fadeUp 0.6s ease both;
+    }
+    .screen > *:nth-child(1) { animation-delay: 0.05s; }
+    .screen > *:nth-child(2) { animation-delay: 0.15s; }
+    .screen > *:nth-child(3) { animation-delay: 0.25s; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="status-bar" id="statusBar"></div>
+
+<div class="screen">
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <div class="header">
+    <div>
+      <div class="room-name" id="roomName">—</div>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">空室</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="clock" id="clock">00:00</div>
+      <div class="date-str" id="dateStr">—</div>
+    </div>
+  </div>
+
+  <!-- ── Timeline + list ─────────────────────────────────── -->
+  <div class="timeline-section">
+    <div class="section-label">本日のスケジュール</div>
+
+    <div class="timeline-track" id="timelineTrack">
+      <!-- ticks, bars, now-line injected by JS -->
+    </div>
+
+    <div class="res-list" id="resList">
+      <!-- reservation items injected by JS -->
+    </div>
+  </div>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <div class="footer">
+    <div class="footer-logo">会議室予約システム</div>
+    <div class="footer-status">
+      <span class="connection-dot" id="connDot"></span>
+      <span id="connText">接続中</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+const DAY_START = 8;   // 08:00
+const DAY_END   = 18;  // 18:00
+const HOURS     = DAY_END - DAY_START;
+
+// Read room from URL: /signage?room=101
+const params = new URLSearchParams(window.location.search);
+const ROOM_ID = params.get('room') || '1';
+
+// ── State ─────────────────────────────────────────────────
+let reservations = [];
+let roomName     = `会議室 ${ROOM_ID}`;
+
+// ── Helpers ───────────────────────────────────────────────
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function timeToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Fraction of the day axis (0..1) for a given HH:MM string
+function timeFrac(t) {
+  const mins = timeToMinutes(t);
+  const start = DAY_START * 60;
+  const total = HOURS * 60;
+  return Math.min(1, Math.max(0, (mins - start) / total));
+}
+
+function nowFrac() {
+  const d = new Date();
+  return timeFrac(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+}
+
+function isCurrentlyOccupied() {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  return reservations.some(r => {
+    const s = timeToMinutes(r.startTime);
+    const e = timeToMinutes(r.endTime);
+    return nowMins >= s && nowMins < e;
+  });
+}
+
+function nextReservation() {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  return reservations
+    .filter(r => timeToMinutes(r.startTime) > nowMins)
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))[0];
+}
+
+function minutesUntil(timeStr) {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  return timeToMinutes(timeStr) - nowMins;
+}
+
+// ── Clock ─────────────────────────────────────────────────
+function updateClock() {
+  const d = new Date();
+  document.getElementById('clock').textContent =
+    `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  document.getElementById('dateStr').textContent =
+    d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Status ────────────────────────────────────────────────
+function updateStatus() {
+  const occupied = isCurrentlyOccupied();
+  const next     = nextReservation();
+  const soonMins = next ? minutesUntil(next.startTime) : Infinity;
+
+  let color, text;
+  if (occupied) {
+    color = 'var(--busy)';  text = '使用中';
+  } else if (soonMins <= 30) {
+    color = 'var(--soon)';  text = `${soonMins}分後に開始`;
+  } else {
+    color = 'var(--free)';  text = '空室';
+  }
+
+  document.documentElement.style.setProperty('--status-color', color);
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('roomName').textContent   = roomName;
+}
+
+// ── Timeline ──────────────────────────────────────────────
+function buildTimeline() {
+  const track = document.getElementById('timelineTrack');
+  track.innerHTML = '';
+
+  // Hour ticks
+  for (let h = DAY_START; h <= DAY_END; h++) {
+    const frac = (h - DAY_START) / HOURS;
+    const tick  = document.createElement('div');
+    tick.className = 'tick';
+    tick.style.left = `${frac * 100}%`;
+    track.appendChild(tick);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'tick-label';
+    lbl.style.left = `${frac * 100}%`;
+    lbl.textContent = `${pad(h)}`;
+    track.appendChild(lbl);
+  }
+
+  // Reservation bars
+  const colors = ['#3ecfb2','#38b2e8','#a38ee8','#e8a838','#e87c38'];
+  reservations.forEach((r, i) => {
+    const left  = timeFrac(r.startTime) * 100;
+    const right = timeFrac(r.endTime) * 100;
+    const bar   = document.createElement('div');
+    bar.className = 'res-bar';
+    bar.style.left    = `${left}%`;
+    bar.style.width   = `${right - left}%`;
+    bar.style.background = colors[i % colors.length];
+    bar.textContent   = r.employeeName || '';
+    track.appendChild(bar);
+  });
+
+  // Now line
+  const line = document.createElement('div');
+  line.className = 'now-line';
+  line.id = 'nowLine';
+  line.style.left = `${nowFrac() * 100}%`;
+  track.appendChild(line);
+}
+
+function updateNowLine() {
+  const line = document.getElementById('nowLine');
+  if (line) line.style.left = `${nowFrac() * 100}%`;
+}
+setInterval(updateNowLine, 60_000);
+
+// ── Reservation list ──────────────────────────────────────
+function buildList() {
+  const list = document.getElementById('resList');
+  list.innerHTML = '';
+
+  if (reservations.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">◻</div>
+        <div class="empty-text">本日の予約はありません</div>
+      </div>`;
+    return;
+  }
+
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  const sorted = [...reservations].sort((a,b) =>
+    timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+  sorted.forEach((r, i) => {
+    const sMins = timeToMinutes(r.startTime);
+    const eMins = timeToMinutes(r.endTime);
+    const isCurrent = nowMins >= sMins && nowMins < eMins;
+    const isPast    = nowMins >= eMins;
+
+    const item = document.createElement('div');
+    item.className = `res-item ${isCurrent ? 'current' : 'upcoming'}`;
+    item.style.animationDelay = `${i * 0.06}s`;
+    item.style.opacity = isPast ? '0.35' : '1';
+
+    const durationMins = eMins - sMins;
+    const durationStr  = durationMins >= 60
+      ? `${Math.floor(durationMins/60)}h${durationMins%60 ? (durationMins%60)+'m' : ''}`
+      : `${durationMins}m`;
+
+    item.innerHTML = `
+      <div class="res-time">
+        ${r.startTime}–${r.endTime}
+        <span>${durationStr}</span>
+      </div>
+      <div>
+        <div class="res-person">${r.employeeName || '—'}</div>
+        <div class="res-dept">${r.departmentName || ''}</div>
+      </div>
+      <div class="res-chip ${isCurrent ? 'now' : ''}">
+        ${isCurrent ? '進行中' : isPast ? '終了' : `${minutesUntil(r.startTime)}分後`}
+      </div>`;
+
+    list.appendChild(item);
+  });
+}
+
+// ── Render all ────────────────────────────────────────────
+function render() {
+  updateStatus();
+  buildTimeline();
+  buildList();
+}
+setInterval(render, 60_000); // refresh status/chips every minute
+
+// ── Fetch today's reservations ────────────────────────────
+async function fetchReservations() {
+  try {
+    const res  = await fetch(`api/reservations?date=${todayStr()}&roomId=${ROOM_ID}`);
+    const data = await res.json();
+
+    // Update room name from data if available, safely
+    if (data.length > 0) {
+      roomName = data[0]?.room?.name || roomName;
+    }
+
+    // Transform data to flat structure expected by signage
+    reservations = data.map(r => ({
+      id: r.id,
+      startTime: r.startTime.substring(0, 5),
+      endTime: r.endTime.substring(0, 5),
+      employeeName: r.reservingEmployee?.name,
+      departmentName: r.reservingEmployee?.department?.name
+    }));
+    render();
+  } catch (err) {
+    console.error('Failed to fetch reservations:', err);
+  }
+}
+
+// ── SSE ───────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource(`api/events?room=${ROOM_ID}`);
+
+  es.addEventListener('reservation:created', e => {
+    const r = JSON.parse(e.data);
+    const transformed = {
+      id: r.id,
+      startTime: r.startTime.substring(0, 5),
+      endTime: r.endTime.substring(0, 5),
+      employeeName: r.reservingEmployee?.name,
+      departmentName: r.reservingEmployee?.department?.name
+    };
+    reservations.push(transformed);
+    render();
+  });
+
+  es.addEventListener('reservation:deleted', e => {
+    const { id } = JSON.parse(e.data);
+    reservations = reservations.filter(r => r.id !== id);
+    render();
+  });
+
+  es.onopen = () => {
+    document.getElementById('connDot').classList.remove('offline');
+    document.getElementById('connText').textContent = '接続中';
+  };
+
+  es.onerror = () => {
+    document.getElementById('connDot').classList.add('offline');
+    document.getElementById('connText').textContent = '再接続中...';
+    // EventSource retries automatically
+  };
+}
+
+// ── Init ──────────────────────────────────────────────────
+document.getElementById('roomName').textContent = `会議室 ${ROOM_ID}`;
+fetchReservations();
+connectSSE();
+</script>
+</body>
+</html>

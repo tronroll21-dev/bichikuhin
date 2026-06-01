@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    .grid-container {
+      display: grid;
+      gap: 1rem;
+      /* Equivalent to Tailwind's gap-4 */
+      grid-template-columns: 1fr;
+      /* Stacked vertically for mobile */
+      height: 100%;
+      /* Ensure container takes full height */
+      width: 100%;
+    }
+
+    @media (min-width: 768px) {
+
+      /* md breakpoint for wider screens */
+      .grid-container {
+        grid-template-columns: 40% 45% 15%;
+        /* Three columns for wider screens */
+        grid-template-rows: auto auto 1fr;
+        /* Top row, calendar, and bottom row */
+      }
+
+      .component-1,
+      .component-2,
+      .component-3,
+      .component-4 {
+        grid-column: span 1;
+      }
+
+      #delivery-calendar-component {
+        grid-column: 1 / -1;
+        /* Span all columns */
+      }
+
+      .component-5 {
+        grid-column: 1 / -1;
+        /* Span all columns */
+      }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/1.2.1/chartjs-plugin-zoom.min.js"></script>
+  <style>
+    #quote-preview-popup {
+      position: fixed;
+      display: none;
+      z-index: 1000;
+      background: #1a1f2e;
+      border: 1px solid var(--accent);
+      color: var(--text);
+      padding: 1rem;
+      border-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      font-size: 0.85rem;
+      min-width: 250px;
+    }
+
+    #quote-preview-popup .preview-title {
+      color: var(--accent);
+      font-weight: bold;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.25rem;
+      font-family: var(--font-mono);
+    }
+
+    #quote-preview-popup .preview-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    #quote-preview-popup .preview-label {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=DM+Mono:wght@400;500&display=swap');
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #151820;
+      --border: #1f2430;
+      --accent: #e8c547;
+      --accent2: #4fa3e0;
+      --text: #d6dae4;
+      --muted: #5a6070;
+      --font-mono: 'DM Mono', monospace;
+      --font-body: 'Noto Sans JP', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 2rem 2.5rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 1.5rem;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    header .meta {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .stats {
+      display: flex;
+      gap: 2rem;
+      padding: 1.25rem 2.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .chart-area {
+      flex: 1;
+      padding: 1.5rem 0rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .chart-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chart-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .btn-reset {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.3rem 0.7rem;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .btn-reset:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .canvas-wrapper {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1rem 1rem 0.5rem;
+      height: 380px;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    /* Apply this to the container of your rows */
+    #previewDetails {
+      display: grid;
+      /* Column 1: adjust to longest text. Column 2: take the rest or auto */
+      grid-template-columns: max-content auto;
+      gap: 10px 20px;
+      /* Vertical gap, Horizontal gap */
+      padding: 10px;
+    }
+
+    /* This makes the <div> act as a "pass-through" so its children 
+   align to the parent's grid columns */
+    #previewDetails>div {
+      display: contents;
+    }
+
+    /* Optional: Right-align the currency/amount for better readability */
+    #previewDetails span:nth-child(2) {
+      text-align: right;
+    }
+  </style>
+
+</head>
+
+<body class="bg-gray-100 p-4">
+  <div id="quote-preview-popup"></div>
+  <div class="grid-container mx-auto">
+    <div class="component-1 bg-white p-4 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-2">直近見積要件</h2>
+      <div role="table" class="min-w-full divide-y divide-gray-200 grid grid-cols-[1fr_1fr_3fr_1fr]">
+        <div role="rowgroup" class="bg-gray-50">
+          <div role="row" class="contents">
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">見積日</div>
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">担当者</div>
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">得意先</div>
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">金額</div>
+          </div>
+        </div>
+        <div role="rowgroup" class="bg-white divide-y divide-gray-200">
+          <div role="row" class="contents">
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">2026-02-20</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">担当者A</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">得意先X</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">100,000</div>
+          </div>
+          <div role="row" class="contents">
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">2026-02-19</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">担当者B</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">得意先Y</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">150,000</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-2 bg-white p-4 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-2">直近受注要件</h2>
+      <div role="table"
+        class="min-w-full divide-y divide-gray-200 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] gap-x-4">
+        <div role="rowgroup" class="bg-gray-50">
+          <div role="row" class="contents">
+            <div role="columnheader" class="py-3 text-left text-xs font-medium text-gray-500 uppercase">日付</div>
+            <div role="columnheader" class="py-3 text-left text-xs font-medium text-gray-500 uppercase">品名</div>
+            <div role="columnheader" class="py-3 text-left text-xs font-medium text-gray-500 uppercase">金額</div>
+            <div role="columnheader" class="py-3 text-left text-xs font-medium text-gray-500 uppercase">得意先</div>
+            <div role="columnheader" class="py-3 text-left text-xs font-medium text-gray-500 uppercase">担当者</div>
+          </div>
+        </div>
+        <div role="rowgroup" class="bg-white divide-y divide-gray-200">
+          <div role="row" class="contents">
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">2026-02-25</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">商品A</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">50,000</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">得意先P</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">担当者C</div>
+          </div>
+          <div role="row" class="contents">
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">2026-02-24</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">商品B</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">75,000</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">得意先Q</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">担当者D</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-3 bg-white p-4 rounded-lg shadow" style="display: none;">
+      <h2 class="text-xl font-semibold mb-2">今後の入荷予定</h2>
+      <div role="table" class="min-w-full divide-y divide-gray-200 grid grid-cols-[1fr_2fr_1fr]">
+        <div role="rowgroup" class="bg-gray-50">
+          <div role="row" class="contents">
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">納期日</div>
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">商品名１</div>
+            <div role="columnheader" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase">担当者名</div>
+          </div>
+        </div>
+        <div role="rowgroup" class="bg-white divide-y divide-gray-200">
+          <div role="row" class="contents">
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">2026-03-01</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">製品X</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">担当者E</div>
+          </div>
+          <div role="row" class="contents">
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">2026-03-02</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">製品Y</div>
+            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">担当者F</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-4 bg-white p-4 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-2">営業担当者</h2>
+      <div id="sales-reps-list" class="space-y-2">
+        <div class="flex items-center">
+          <input type="checkbox" id="master-checkbox"
+            class="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out" checked>
+          <label for="master-checkbox" class="ml-2 block text-sm leading-5 font-medium text-gray-700">全て選択</label>
+        </div>
+        <!-- Sales rep checkboxes will be populated here -->
+      </div>
+    </div>
+
+    <div id="delivery-calendar-component" class="bg-white p-4 rounded-lg shadow" style="display: none;">
+      <h2 class="text-xl font-semibold mb-2">納品スケジュール</h2>
+      <div id="mini-calendar" class="grid grid-cols-8 gap-1 text-center">
+        <div class="font-bold text-xs text-gray-500 uppercase">日</div>
+        <div class="font-bold text-xs text-gray-500 uppercase">月</div>
+        <div class="font-bold text-xs text-gray-500 uppercase">火</div>
+        <div class="font-bold text-xs text-gray-500 uppercase">水</div>
+        <div class="font-bold text-xs text-gray-500 uppercase">木</div>
+        <div class="font-bold text-xs text-gray-500 uppercase">金</div>
+        <div class="font-bold text-xs text-gray-500 uppercase">土</div>
+        <div id="legend" class="px-8 row-span-4 space-y-4">
+          <h1>凡例</h1>
+          <div class="bg-green-100 text-green-800 text-xs rounded px-1.5 py-0.5 truncate" title="凡例_入荷">入荷予定</div>
+          <div class="bg-red-100 text-red-800 text-xs rounded px-1.5 py-0.5 truncate" title="凡例_入荷">受注納期</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-5 bg-white p-4 rounded-lg shadow">
+      <header>
+        <h1>受注金額タイムライン</h1>
+        <span class="meta" id="updated-at"></span>
+      </header>
+
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">データ件数</span>
+          <span class="stat-value" id="stat-count">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">合計金額</span>
+          <span class="stat-value" id="stat-total">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">最大月</span>
+          <span class="stat-value" id="stat-max">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">期間</span>
+          <span class="stat-value" id="stat-range">—</span>
+        </div>
+      </div>
+
+      <div class="chart-area">
+        <div class="chart-controls">
+          <span class="chart-label">月別契約金額 — スクロールでズーム、ドラッグでパン</span>
+          <button class="btn-reset" id="btn-reset">ズームリセット</button>
+        </div>
+        <div class="canvas-wrapper">
+          <canvas id="chart"></canvas>
+        </div>
+      </div>
+      <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+          const salesRepsListDiv = document.getElementById('sales-reps-list');
+          const masterCheckbox = document.getElementById('master-checkbox');
+          let allSalesReps = []; // To store all sales reps data
+
+          function getCalendarDates(baseDate) {
+            const dates = [];
+            const start = new Date(baseDate);
+            // Start from the Sunday of the previous week.
+            start.setDate(start.getDate() - start.getDay() - 7);
+
+            for (let i = 0; i < 21; i++) {
+              const d = new Date(start);
+              d.setDate(d.getDate() + i);
+              dates.push(d);
+            }
+            return dates;
+          }
+
+          function renderDeliveryCalendar(arrivals){
+            const calendarComponent = document.getElementById('delivery-calendar-component');
+            const calendarContainer = document.getElementById('mini-calendar');
+            if (!calendarContainer || !calendarComponent) return;
+
+            // Clear previous content, keeping headers
+            while (calendarContainer.children.length > 8) {
+              calendarContainer.removeChild(calendarContainer.lastChild);
+            }
+
+            const todayForContext = new Date(); // As per prompt context
+            const dates = getCalendarDates(todayForContext);
+            const currentMonth = todayForContext.getMonth();
+
+            const arrivalsByDate = {};
+            if (arrivals) {
+              arrivals.forEach(arrival => {
+                const dateStr = String(arrival["納期日"]);
+                if (dateStr.length !== 8) return;
+                const key = `${dateStr.slice(0, 4)}-${String(dateStr.slice(4, 6)).padStart(2, '0')}-${String(dateStr.slice(6, 8)).padStart(2, '0')}`;
+                if (!arrivalsByDate[key]) {
+                  arrivalsByDate[key] = [];
+                }
+                arrivalsByDate[key].push(arrival);
+              });
+            }
+
+            dates.forEach(date => {
+              const cell = document.createElement('div');
+              cell.classList.add('p-1', 'border', 'rounded-md', 'h-28', 'flex', 'flex-col');
+
+              if (date.getMonth() !== currentMonth) {
+                cell.classList.add('bg-gray-50');
+              }
+
+              const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+              const daySpan = document.createElement('span');
+              daySpan.classList.add('text-xs', 'self-start');
+              daySpan.textContent = date.getDate();
+
+              if (date.toDateString() === todayForContext.toDateString()) {
+                daySpan.classList.add('bg-blue-600', 'text-white', 'font-bold', 'rounded-full', 'h-5', 'w-5', 'flex', 'items-center', 'justify-center');
+              } else {
+                daySpan.classList.add('text-gray-600');
+              }
+
+              cell.appendChild(daySpan);
+
+              const pillsContainer = document.createElement('div');
+              pillsContainer.classList.add('mt-1', 'space-y-1', 'overflow-y-auto', 'flex-grow');
+              cell.appendChild(pillsContainer);
+
+              if (arrivalsByDate[dateKey]) {
+                arrivalsByDate[dateKey].slice(0, 2).forEach(arrival => { // Limit to 2 pills to avoid overflow
+                  const pill = document.createElement('div');
+                  if (arrival["表示フラグ"] === '1') {
+                    pill.classList.add('bg-green-100', 'text-green-800');
+                  } else {
+                    pill.classList.add('bg-gray-100', 'text-red-800');
+                  }
+
+                  pill.classList.add('text-xs', 'rounded', 'px-1.5', 'py-0.5', 'truncate');
+                  pill.textContent = arrival["品名１"];
+                  pill.title = `${arrival["品名１"]} (${arrival["担当者名"]})`;
+                  pillsContainer.appendChild(pill);
+                });
+                if (arrivalsByDate[dateKey].length > 2) {
+                  const morePill = document.createElement('div');
+                  morePill.classList.add('text-xs', 'text-gray-500', 'text-center', 'mt-1');
+                  morePill.textContent = `あと${arrivalsByDate[dateKey].length - 2}件`;
+                  pillsContainer.appendChild(morePill);
+                }
+              }
+
+              calendarContainer.appendChild(cell);
+            });
+            calendarComponent.style.display = 'block';
+          }
+
+          async function updateFilteredData(selectedRepCode = null) {
+            try {
+
+              const recentQuotes = DASHBOARD_DATA.recentQuotes;
+
+              // Populate Recent Quotes table
+              const recentQuotesTableBody = document.querySelector('.component-1 .divide-y.divide-gray-200');
+              const previewPopup = document.getElementById('quote-preview-popup');
+              recentQuotesTableBody.innerHTML = ''; // Clear existing placeholder data
+              recentQuotes.filter((quote, index, array) => {
+                  // Always keep the first element
+                  if (index === 0) return true;
+                  
+                  // Compare current ID with the previous one
+                  return quote.伝票No !== array[index - 1].伝票No;
+                })
+                .filter(  (quote, index, array) => {
+                    return selectedRepCode == '999999' || selectedRepCode.slice(0,2) == quote.営業担当者名.slice(0,2);
+                })
+                .sort((a, b) => new Date(b.見積書日付) - new Date(a.見積書日付)).slice(0,10).forEach(quote => {
+                const row = document.createElement('div');
+                row.setAttribute('role', 'row');
+                row.classList.add('contents', 'quote-row');
+                row.setAttribute('data-denpyou', quote["伝票No"]);
+                row.innerHTML = `
+                            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">${String(quote["見積書日付"]).replace(/(\d{4})(\d{2})(\d{2})/, '$1年$2月$3日')}</div>
+                            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">${quote["営業担当者名"]}</div>
+                            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">${quote["会社名"]}</div>
+                            <div role="cell" class="px-2 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${Number(quote["金額"]).toLocaleString()}</div>
+                        `;
+                recentQuotesTableBody.appendChild(row);
+              });
+
+              // Event delegation for hover events
+              recentQuotesTableBody.addEventListener('mouseover', async (e) => {
+                const row = e.target.closest('.quote-row');
+                if (!row) return;
+
+                const denpyouNo = row.getAttribute('data-denpyou');
+                if (previewPopup.getAttribute('data-active-denpyou') === denpyouNo) {
+                  previewPopup.style.display = 'block';
+                  return;
+                }
+
+                previewPopup.setAttribute('data-active-denpyou', denpyouNo);
+                previewPopup.innerHTML = '<div class="text-xs text-gray-400">Loading...</div>';
+                previewPopup.style.display = 'block';
+
+                try {
+                  const previewData = DASHBOARD_DATA.recentQuotes.filter(q => q.伝票No == denpyouNo);
+
+                  if (previewData[0] && previewData[0]["見積書番号"]) {
+                    previewPopup.innerHTML = `
+                                            <div class="preview-title">見積書プレビュー</div>
+                                            <div class="preview-row"><span class="preview-label">伝票番号</span><span>${previewData[0]["伝票No"]}</span></div>
+                                            <div class="preview-row"><span class="preview-label">見積書番号</span><span>${previewData[0]["見積書番号"]}</span></div>
+                                            <div class="preview-row"><span class="preview-label">件名</span><span>${previewData[0]["件名"] || '---'}</span></div>
+                                            <div class="preview-row"><span class="preview-label">得意先</span><span>${previewData[0]["会社名"]}</span></div>
+                                            <div class="preview-row"><span class="preview-label">担当者</span><span>${previewData[0]["営業担当者名"]}</span></div>
+                                            <hr>
+                                        `;
+                    let details = '';
+                    for (detail of previewData) {
+                      details += `<div><span>${detail["品名仕様"]}</span><span>${Number(detail["金額"]).toLocaleString()}</span></div>`;
+                    };
+                    previewPopup.innerHTML += "<div id='previewDetails'>" + details + `</div>`;
+                  } else {
+                    previewPopup.innerHTML = '<div class="text-xs text-red-400">詳細が見つかりませんでした</div>';
+                  }
+                } catch (err) {
+                  previewPopup.innerHTML = '<div class="text-xs text-red-400">エラーが発生しました</div>';
+                }
+              });
+
+              recentQuotesTableBody.addEventListener('mousemove', (e) => {
+                if (previewPopup.style.display === 'block') {
+                  previewPopup.style.left = (e.clientX + 15) + 'px';
+                  previewPopup.style.top = (e.clientY + 15) + 'px';
+                }
+              });
+
+              recentQuotesTableBody.addEventListener('mouseout', (e) => {
+                const row = e.target.closest('.quote-row');
+                const nextRow = e.relatedTarget ? e.relatedTarget.closest('.quote-row') : null;
+                if (row && row !== nextRow) {
+                  previewPopup.style.display = 'none';
+                  previewPopup.removeAttribute('data-active-denpyou');
+                }
+              });
+
+              // Populate Recent Orders table
+              const recentOrdersTableBody = document.querySelector('.component-2 .divide-y.divide-gray-200');
+              recentOrdersTableBody.innerHTML = ''; // Clear existing placeholder data
+              const recentOrders = DASHBOARD_DATA.recentOrders
+              .filter(  (order, index, array) => {
+                    return selectedRepCode == '999999' || selectedRepCode.slice(0,2) == order.担当者.slice(0,2);
+                })              
+              .sort((a, b) => new Date(b["日付"]) - new Date(a["日付"])).slice(0,10);
+              recentOrders.forEach(order => {
+                const row = document.createElement('div');
+                row.setAttribute('role', 'row');
+                row.classList.add('contents');
+                row.innerHTML = `
+                            <div role="cell" class="py-2 whitespace-nowrap text-sm text-gray-900">${String(order["日付"]).replace(/(\d{4})(\d{2})(\d{2})/, '$1年$2月$3日')}</div>
+                            <div role="cell" class="py-2 whitespace-nowrap text-sm text-gray-900 overflow-hidden text-ellipsis">${order["品名"]}</div>
+                            <div role="cell" class="py-2 whitespace-nowrap text-sm text-gray-900 text-right">${Number(order["金額"]).toLocaleString()}</div>
+                            <div role="cell" class="py-2 whitespace-nowrap text-sm text-gray-900">${order["得意先名１"]}</div>
+                            <div role="cell" class="py-2 whitespace-nowrap text-sm text-gray-900">${order["担当者"]}</div>
+                        `;
+                recentOrdersTableBody.appendChild(row);
+              });
+
+              renderDeliveryCalendar(
+                DASHBOARD_DATA.recentUpcomingEvents
+                .filter(  (event, index, array) => {
+                    return selectedRepCode == '999999' || selectedRepCode.slice(0,2) == event.担当者名.slice(0,2);
+                })              
+              );
+              
+            } catch (error) {
+              console.error('Error fetching dashboard data:', error);
+            }
+          }
+
+          // Fetch and populate sales reps checkboxes
+          try {
+            
+            allSalesReps = DASHBOARD_DATA.salesReps; // Store for later use
+
+            allSalesReps.forEach(rep => {
+              const repDiv = document.createElement('div');
+              repDiv.classList.add('flex', 'items-center');
+              repDiv.innerHTML = `
+                        <input type="checkbox" id="rep-${rep["担当者コード"]}" value="${rep["担当者略称"]}" class="form-checkbox h-4 w-4 text-indigo-600 sales-rep-checkbox" checked>
+                        <label for="rep-${rep["担当者コード"]}" class="ml-2 block text-sm leading-5 font-medium text-gray-700">${rep["担当者略称"]}</label>
+                    `;
+              salesRepsListDiv.appendChild(repDiv);
+
+              repDiv.querySelector('.sales-rep-checkbox').addEventListener('change', (event) => {
+                document.querySelectorAll('.sales-rep-checkbox').forEach(cb => {
+                  if (cb !== event.target) {
+                    cb.checked = false;
+                  }
+                });
+                masterCheckbox.checked = false; // Master checkbox should be unchecked if only one is selected
+                event.target.checked = true; // Ensure the clicked checkbox remains checked
+                updateFilteredData(event.target.value);
+              });
+            });
+
+            masterCheckbox.addEventListener('change', (event) => {
+              document.querySelectorAll('.sales-rep-checkbox').forEach(checkbox => {
+                checkbox.checked = event.target.checked;
+              });
+              if (event.target.checked) {
+                updateFilteredData('999999'); // All selected
+              } else {
+                updateFilteredData(''); // None selected (effectively, show all data unfiltered or no data depending on backend)
+              }
+            });
+
+            // Initial load: all checkboxes are checked by default, so fetch for all sales reps ('999999')
+            updateFilteredData('999999');
+
+          } catch (error) {
+            console.error('Error initializing sales reps:', error);
+          }
+        });
+      </script>
+      <script>
+        // ── HELPERS ─────────────────────────────────────────────────────────────────
+        function formatYearMonth(ym) {
+          const s = String(ym);
+          return `${s.slice(0, 4)}年${s.slice(4, 6)}月`;
+        }
+
+        function ymToLabel(ym) {
+          const s = String(ym);
+          return `${s.slice(0, 4)}-${s.slice(4, 6)}`;
+        }
+
+        function formatAmount(n) {
+          return '¥' + n.toLocaleString('ja-JP');
+        }
+
+        const KISHU_NAMES = {
+          '001': 'カレンダー',
+          '002': 'ミキシング',
+          '003': 'インテンシブミキサー',
+          '004': 'ストレーナー',
+          '005': '圧延機'
+        };
+
+        function kishuLabel(code) {
+          return KISHU_NAMES[code] || `機種 ${code}`;
+        }
+
+        const PALETTE = [
+          '#4fa3e0', '#e8c547', '#6ed8a0', '#e07a5f',
+          '#b48ef5', '#f0a500', '#50c8c6', '#e05494',
+          '#a8d8a8', '#f4a261'
+        ];
+
+        // ── INIT ─────────────────────────────────────────────────────────────────────
+        async function init() {
+          
+          const amounts = DASHBOARD_DATA.contractAmount;
+          const sorted = [...amounts].sort((a, b) => a.年月 - b.年月);
+
+          // ── STATS ──────────────────────────────────────────────────────────────────
+          const total = amounts.reduce((s, d) => s + parseInt(d.金額, 0), 0);
+
+          const monthTotals = {};
+          amounts.forEach(d => {
+            monthTotals[d.年月] = (monthTotals[d.年月] || 0) + d.金額;
+          });
+          const maxMonth = Object.entries(monthTotals).reduce((a, b) => b[1] > a[1] ? b : a)[0];
+
+          // document.getElementById('updated-at').textContent =
+          //   '更新: ' + new Date(data.updated_at).toLocaleString('ja-JP');
+          document.getElementById('stat-count').textContent = amounts.length + ' 件';
+          document.getElementById('stat-total').textContent = formatAmount(total);
+          document.getElementById('stat-max').textContent = formatYearMonth(Number(maxMonth));
+          document.getElementById('stat-range').textContent =
+            formatYearMonth(sorted[0].年月) + ' 〜 ' + formatYearMonth(sorted[sorted.length - 1].年月);
+
+          // ── BUILD CHART DATA ───────────────────────────────────────────────────────
+          const labelsSet = [...new Set(sorted.map(d => ymToLabel(d.年月)))];
+          const codesSet = [...new Set(amounts.map(d => d.機種コード))].sort();
+
+          const codeMap = {};
+          codesSet.forEach(code => { codeMap[code] = {}; });
+          amounts.forEach(d => {
+            const lbl = ymToLabel(d.年月);
+            codeMap[d.機種コード][lbl] = (codeMap[d.機種コード][lbl] || 0) + d.金額;
+          });
+
+          const datasets = codesSet.map((code, i) => ({
+            label: kishuLabel(code),
+            data: labelsSet.map(lbl => codeMap[code][lbl] || 0),
+            backgroundColor: PALETTE[i % PALETTE.length] + 'cc',
+            hoverBackgroundColor: PALETTE[i % PALETTE.length],
+            borderWidth: 0,
+            borderRadius: 2,
+          }));
+
+          // ── CHART ──────────────────────────────────────────────────────────────────
+          const ctx = document.getElementById('chart').getContext('2d');
+          const chart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: labelsSet, datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 400 },
+              scales: {
+                x: {
+                  stacked: true,
+                  ticks: {
+                    color: '#5a6070',
+                    font: { family: "'DM Mono', monospace", size: 11 },
+                    maxRotation: 45,
+                  },
+                  grid: { color: '#1f2430' },
+                  border: { color: '#1f2430' },
+                },
+                y: {
+                  stacked: true,
+                  ticks: {
+                    color: '#5a6070',
+                    font: { family: "'DM Mono', monospace", size: 11 },
+                    callback: v => {
+                      if (v >= 1_000_000) return '¥' + (v / 1_000_000).toLocaleString('ja-JP') + 'M';
+                      if (v >= 1_000) return '¥' + (v / 1_000).toLocaleString('ja-JP') + 'K';
+                      return '¥' + v;
+                    }
+                  },
+                  grid: { color: '#1f2430' },
+                  border: { color: '#1f2430' },
+                }
+              },
+              plugins: {
+                legend: {
+                  position: 'top',
+                  align: 'end',
+                  labels: {
+                    color: '#d6dae4',
+                    font: { family: "'DM Mono', monospace", size: 11 },
+                    boxWidth: 12,
+                    boxHeight: 12,
+                    padding: 16,
+                  }
+                },
+                tooltip: {
+                  backgroundColor: '#1a1f2e',
+                  borderColor: '#e8c547',
+                  borderWidth: 1,
+                  titleColor: '#e8c547',
+                  bodyColor: '#d6dae4',
+                  padding: 10,
+                  titleFont: { family: "'DM Mono', monospace", size: 12, weight: 'bold' },
+                  bodyFont: { family: "'DM Mono', monospace", size: 11 },
+                  callbacks: {
+                    title: items => items[0].label.replace('-', '年') + '月',
+                    label: item => ` ${kishuLabel(codesSet[item.datasetIndex])}: ${formatAmount(item.raw)}`,
+                    afterLabel: item => {
+                      const code = codesSet[item.datasetIndex];
+                      const lbl = item.label;
+                      const orders = amounts
+                        .filter(d => ymToLabel(d.年月) === lbl && d.機種コード === code && d.注文番号リスト)
+                        .flatMap(d => d.注文番号リスト.split(',').map(s => s.trim()).filter(Boolean));
+                      if (orders.length === 0) return null;
+                      // Wrap into lines of ~40 chars
+                      const lines = [];
+                      let line = ' 注文: ';
+                      orders.forEach((o, i) => {
+                        const sep = i === 0 ? '' : ', ';
+                        if ((line + sep + o).length > 42) {
+                          lines.push(line.trimEnd());
+                          line = '   ' + o;
+                        } else {
+                          line += sep + o;
+                        }
+                      });
+                      lines.push(line);
+                      return lines;
+                    },
+                    footer: items => {
+                      const sum = items.reduce((s, i) => s + i.raw, 0);
+                      return `合計: ${formatAmount(sum)}`;
+                    }
+                  }
+                },
+                zoom: {
+                  pan: {
+                    enabled: true,
+                    mode: 'x',
+                  },
+                  zoom: {
+                    wheel: { enabled: true },
+                    pinch: { enabled: true },
+                    mode: 'x',
+                  }
+                }
+              }
+            }
+          });
+
+          // ── VISIBLE STATS ──────────────────────────────────────────────────────────
+          function updateStats() {
+            const { min, max } = chart.scales.x;
+            const visibleLabels = labelsSet.filter((_, i) => i >= Math.floor(min) && i <= Math.ceil(max));
+            if (visibleLabels.length === 0) return;
+
+            const visibleAmounts = amounts.filter(d => visibleLabels.includes(ymToLabel(d.年月)));
+            const visibleTotal = visibleAmounts.reduce((s, d) => s + parseInt(d.金額, 0), 0);
+
+            const visibleMonthTotals = {};
+            visibleAmounts.forEach(d => {
+              visibleMonthTotals[d.年月] = (visibleMonthTotals[d.年月] || 0) + d.金額;
+            });
+            const visibleMaxMonth = Object.entries(visibleMonthTotals)
+              .reduce((a, b) => b[1] > a[1] ? b : a)[0];
+
+            const sortedVisible = [...visibleLabels].sort();
+
+            document.getElementById('stat-count').textContent = visibleAmounts.length + ' 件';
+            document.getElementById('stat-total').textContent = formatAmount(visibleTotal);
+            document.getElementById('stat-max').textContent = formatYearMonth(Number(visibleMaxMonth));
+            document.getElementById('stat-range').textContent =
+              sortedVisible[0].replace('-', '年') + '月' +
+              ' 〜 ' +
+              sortedVisible[sortedVisible.length - 1].replace('-', '年') + '月';
+          }
+
+          // Wire zoom/pan callbacks
+          chart.options.plugins.zoom.zoom.onZoomComplete = updateStats;
+          chart.options.plugins.zoom.pan.onPanComplete = updateStats;
+          chart.update('none');
+
+          document.getElementById('btn-reset').addEventListener('click', () => {
+            chart.resetZoom();
+            setTimeout(updateStats, 50);
+          });
+        }
+
+        init();
+      </script>
+
+</html>

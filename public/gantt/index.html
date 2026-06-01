@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程スケジュール・ガントチャート</title>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+body{font-family:sans-serif;margin:0;background-color:#f4f7f9;color:#333}h1{color:#2c3e50;text-align:center;padding-top:20px}.container{display:flex;height:100vh}.main-content{flex-grow:1;padding:20px;overflow-y:auto;position:relative}.chart-container{width:90%;max-width:1000px;margin:20px auto;padding:20px;background-color:#fff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1)}.chart-title{text-align:center;font-size:1.2em;font-weight:700;margin-bottom:15px}.description{text-align:center;margin-top:10px;font-size:.9em;color:#777}.details-panel{position:fixed;top:0;right:0;width:400px;max-width:90%;height:100%;background-color:#fcfcfc;box-shadow:-4px 0 10px rgba(0,0,0,.1);padding:20px;overflow-y:auto;z-index:100}.details-panel h2{margin-top:0;border-bottom:2px solid #ccc;padding-bottom:10px;display:flex;justify-content:space-between;align-items:center}.details-panel h2 span{font-size:.8em;color:#777}.close-btn{background:none;border:none;font-size:1.5em;cursor:pointer;color:#888}.close-btn:hover{color:#333}.detail-item{border-bottom:1px solid #eee;padding:10px 0}.detail-item:last-child{border-bottom:none}.detail-item strong{display:block;color:#2c3e50;margin-bottom:4px}
+    </style>
+</head>
+<body>
+
+    <div x-data="ganttChart()" class="container">
+        <div class="main-content">
+            <h1>工程スケジュール・ガントチャート</h1>
+
+            <div class="chart-container">
+                <div class="chart-title">費目名ごとの工期期間（クリックで詳細表示）</div>
+                <canvas id="upperChart"></canvas>
+                <div class="description">棒グラフは、その費目名の最も早い着手日から最も遅い完了日までの期間を示します。</div>
+            </div>
+
+            <div class="chart-container" x-show="selectedCostItem">
+                <div class="chart-title" x-text="'費目名: ' + selectedCostItem + ' の品目名別工期期間'"></div>
+                <canvas id="lowerChart"></canvas>
+                <div class="description">棒グラフをクリックすると、その品目名の詳細が右のパネルに表示されます。</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("alpine:init",(()=>{Alpine.data("ganttChart",(()=>({xmlData:`
+XML_DATA
+`,processData:[],selectedCostItem:null,selectedItem:null,upperChart:null,lowerChart:null,isAnimating:!1,dateRange:{min:null,max:null},init(){this.parseXmlData(),this.getOverallDateRange(),this.renderUpperChart(),this.$watch("selectedCostItem",(t=>{t?(this.selectedItem=null,this.renderLowerChart(t)):this.lowerChart&&(this.lowerChart.destroy(),this.lowerChart=null)}))},parseXmlData(){const t=(new DOMParser).parseFromString(this.xmlData.trim(),"text/xml");if(t.getElementsByTagName("parsererror").length>0)return void console.error("Error parsing XML:",t.getElementsByTagName("parsererror")[0].textContent);const e=t.getElementsByTagName("出力");this.processData=Array.from(e).map((t=>({"製番":t.getElementsByTagName("製番")[0]?.textContent,"品目コード":t.getElementsByTagName("品目コード")[0]?.textContent,"品目名":t.getElementsByTagName("品目名")[0]?.textContent,"費目コード":t.getElementsByTagName("費目コード")[0]?.textContent,"費目名":t.getElementsByTagName("費目名")[0]?.textContent,"着手予定日":t.getElementsByTagName("着手予定日")[0]?.textContent,"完了予定日":t.getElementsByTagName("完了予定日")[0]?.textContent,"予定作業時間":parseFloat(t.getElementsByTagName("予定作業時間")[0]?.textContent||0)})))},getCostItemSpans(){const t={};return this.processData.forEach((e=>{const a=e["費目名"],s=new Date(e["着手予定日"]),n=new Date(e["完了予定日"]),r=e["予定作業時間"];t[a]?(s<t[a].minDate&&(t[a].minDate=s),n>t[a].maxDate&&(t[a].maxDate=n),t[a].totalWorkTime+=r):t[a]={minDate:s,maxDate:n,totalWorkTime:r}})),Object.keys(t).map((e=>({costItemName:e,startDate:t[e].minDate,endDate:t[e].maxDate,totalWorkTime:t[e].totalWorkTime})))},getItemNameSpans(t){const e=this.processData.filter((e=>e["費目名"]===t)),a={};return e.forEach((t=>{const e=t["品目名"],s=new Date(t["着手予定日"]),n=new Date(t["完了予定日"]);a[e]={startDate:s,endDate:n}})),Object.keys(a).map((t=>({itemName:t,startDate:a[t].startDate,endDate:a[t].endDate})))},getDetails(t,e){return this.processData.filter((a=>a["費目名"]===t&&a["品目名"]===e))},getOverallDateRange(){let t=new Date(this.processData[0]["着手予定日"]),e=new Date(this.processData[0]["完了予定日"]);this.processData.forEach((a=>{const s=new Date(a["着手予定日"]),n=new Date(a["完了予定日"]);s<t&&(t=s),n>e&&(e=n)})),this.dateRange.min=t,this.dateRange.max=e},renderUpperChart(){const t=this.getCostItemSpans(),e=document.getElementById("upperChart").getContext("2d");this.upperChart&&this.upperChart.destroy(),this.isAnimating=!0,this.upperChart=new Chart(e,{type:"bar",options:{indexAxis:"y",responsive:!0,plugins:{legend:{display:!1},title:{display:!1},tooltip:{callbacks:{label:function(t){return`期間: ${new Date(t.parsed._custom.start).toLocaleDateString("ja-JP")} - ${new Date(t.parsed._custom.end).toLocaleDateString("ja-JP")}, 予定作業時間: ${t.dataset.data[t.dataIndex].totalWorkTime}時間`}}}},scales:{x:{type:"time",time:{unit:"day"},title:{display:!0,text:"日付"},min:this.dateRange.min,max:this.dateRange.max},y:{title:{display:!0,text:"費目名"},barPercentage:.5,categoryPercentage:.5}},animation:{onComplete:()=>{this.isAnimating=!1}},onClick:(t,e)=>{if(!this.isAnimating&&e.length>0){const t=e[0].index,a=this.upperChart.data.labels[t];this.selectedCostItem=a}}},data:{labels:t.map((t=>t.costItemName)),datasets:[{data:t.map((t=>({x:[t.startDate,t.endDate],y:t.costItemName,totalWorkTime:t.totalWorkTime}))),backgroundColor:"rgba(54, 162, 235, 0.6)",borderColor:"rgba(54, 162, 235, 1)",borderWidth:1}]}})},renderLowerChart(t){const e=this.getItemNameSpans(t),a=document.getElementById("lowerChart").getContext("2d");this.lowerChart&&this.lowerChart.destroy(),this.isAnimating=!0;const s=e.length>0?e.reduce(((t,e)=>e.startDate<t?e.startDate:t),e[0].startDate):this.dateRange.min;this.lowerChart=new Chart(a,{type:"bar",options:{indexAxis:"y",responsive:!0,plugins:{legend:{display:!1},title:{display:!1},tooltip:{callbacks:{label:function(t){return`期間: ${new Date(t.parsed._custom.start).toLocaleDateString("ja-JP")} - ${new Date(t.parsed._custom.end).toLocaleDateString("ja-JP")}, 予定作業時間: ${t.dataset.data[t.dataIndex].workTime}時間`}}}},scales:{x:{type:"time",time:{unit:"day"},title:{display:!0,text:"日付"},min:s,max:this.dateRange.max},y:{title:{display:!0,text:"品目名"},barPercentage:.5,categoryPercentage:.5}},animation:{onComplete:()=>{this.isAnimating=!1}},onClick:(e,a)=>{if(!this.isAnimating&&a.length>0){const e=a[0].index,s=this.lowerChart.data.labels[e],n=this.getDetails(t,s);this.selectedItem={mfgNumber:n[0]?.["製番"],costItemName:t,itemCode:n[0]?.["品目コード"],itemName:s,startDate:new Date(this.lowerChart.data.datasets[0].data[e].x[0]).toLocaleDateString("ja-JP"),endDate:new Date(this.lowerChart.data.datasets[0].data[e].x[1]).toLocaleDateString("ja-JP"),items:n}}}},data:{labels:e.map((t=>t.itemName)),datasets:[{data:e.map((t=>({x:[t.startDate,t.endDate],y:t.itemName,workTime:this.processData.find((e=>e["品目名"]===t.itemName))["予定作業時間"]}))),backgroundColor:"rgba(75, 192, 192, 0.6)",borderColor:"rgba(75, 192, 192, 1)",borderWidth:1}]}})}})))}));
+    </script>
+</body>
+</html>

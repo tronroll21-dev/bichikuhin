@@ -92,6 +92,26 @@ const Stocktaking = sequelize.define('Stocktaking', {
 Stocktaking.hasMany(StockRecord, { foreignKey: 'StocktakingId' });
 StockRecord.belongsTo(Stocktaking);
 
+// 骨董品カテゴリーテーブル
+const KottouhinCategory = sequelize.define('KottouhinCategory', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.STRING, allowNull: false, unique: true }
+});
+
+// 骨董品テーブル
+const Kottouhin = sequelize.define('Kottouhin', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.STRING, allowNull: false },
+    photo: { type: DataTypes.STRING }, // 画像のパスまたはURL
+    entry_date: { type: DataTypes.DATEONLY, defaultValue: DataTypes.NOW }
+});
+
+// 骨董品とカテゴリーの紐付け
+KottouhinCategory.hasMany(Kottouhin, { foreignKey: 'KottouhinCategoryId' });
+Kottouhin.belongsTo(KottouhinCategory);
+
+// 会議室予約システム
+const { Room, Department, Employee, Reservation } = require('./reservations')(sequelize);
 
 // データベース接続とモデルをエクスポート
 module.exports = {
@@ -101,5 +121,11 @@ module.exports = {
     Bichikuhin,
     StockRecord,
     Unit,
-    Stocktaking
+    Stocktaking,
+    Kottouhin,
+    KottouhinCategory,
+    Room,
+    Department,
+    Employee,
+    Reservation
 };

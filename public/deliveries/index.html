@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>当月出荷予定表</title>
+  <style>
+    body { font-family: sans-serif; font-size: 1.5rem;}
+    table { border-collapse: collapse; table-layout: fixed; width: 100%;}
+    th, td { border: 1px solid #888; padding: 0.1rem; white-space: nowrap; }
+    th { background: #d9ebf9; }
+    #status { font-size: 0.85rem; color: #555; margin-top: 0.5rem; }
+    .amount { text-align: right; }
+
+    tr:nth-child(odd) {
+    background: #f1f1f1;
+}
+  </style>
+</head>
+<body>
+  <!-- <h1>当月出荷予定表&nbsp;<span id="status"></span></h1> -->
+  <p id="status"></p>
+  <table id="deliveries-table">
+    <thead>
+      <tr>
+        <th style="width: 4%;">製番</th>
+        <th style="width: 6%;">担当</th> 
+        <th style="width: 15%;" colspan="1">納入先</th>
+        <th style="width: 20%;" colspan="1">形式／品名</th>
+        <th style="width: 5%;" colspan="1">数量</th>
+        <th style="width: 6%;">出荷予定日</th>
+        <th style="width: 6%;">受注納期日</th>
+        <th style="width: 5%;">製作月</th>
+        <th style="width: 15%;">備考</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="5">読み込み中…</td></tr>
+    </tbody>
+  </table>
+
+
+  <script>
+    async function fetchDeliveries() {
+      try {
+        const res = await fetch('/api/cur_month_deliveries');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+
+        for (const d of data.deliveries) {
+          const row_top = document.createElement('tr');
+          row_top.innerHTML = `
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td style="text-align: left;">${d["納入先コード"]}</td>
+            <td style="text-align: left;">${d["形式"]}</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+            <td>&nbsp;</td>
+          `;
+          tbody.appendChild(row_top);
+          const row_bottom = document.createElement('tr');
+          row_bottom.innerHTML = `
+            <td style="text-align: center;">${d["製番（メイン）"]}</td>
+            <td style="text-align: center;overflow:hidden;">${d["担当者名"]}</td>
+            <td style="text-align: left;overflow:hidden;">${d["納入先名"]}</td>
+            <td style="text-align: left;overflow:hidden;">${d["品名"]}</td>
+            <td style="text-align: center;">${d["数量"] + ' ' + d["単位"]}</td>
+            <td style="text-align: center;">${String(d["出荷予定日"]).replace(/(\d{4})(\d{2})(\d{2})/, '$1年$2月$3日')}</td>
+            <td style="text-align: center;">${String(d["納期日"]).replace(/(\d{4})(\d{2})(\d{2})/, '$1年$2月$3日')}</td>
+            <td style="text-align: center;">${String(d["製作月"]).replace(/(\d{4})(\d{2})/, '$1年$2月')}</td>
+            <td style="overflow:hidden;">${d["備考"]}</td>
+          `;
+          tbody.appendChild(row_bottom);
+        }
+
+        document.getElementById('status').textContent =
+          `最新更新: ${new Date(data.updated_at).toLocaleTimeString()}`;
+      } catch (err) {
+        document.getElementById('status').textContent = `Error: ${err.message}`;
+      }
+    }
+
+    fetchDeliveries();
+    setInterval(fetchDeliveries, 5000);
+  </script>
+</body>
+</html>

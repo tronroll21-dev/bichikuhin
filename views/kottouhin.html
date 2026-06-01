@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>骨董品管理 - アンティークギャラリー</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 90%;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin: 0px auto;
+        }
+
+        /* フォームセクションのスタイル */
+        #formFields {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            column-gap: 36px;
+        }
+
+        .form-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #5cb85c;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #4cae4c;
+        }
+
+        .btn-toggle {
+            background-color: #007bff;
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .btn-toggle:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-edit {
+            background-color: #f0ad4e;
+            color: white;
+            padding: 5px 10px;
+            font-size: 14px;
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+        }
+
+        .btn-edit:hover {
+            background-color: #ec971f;
+        }
+
+        #formContainer {
+            display: none;
+        }
+
+        /* 初期状態は非表示 */
+
+
+        /* レイアウト: サイドメニュー + ギャラリー */
+        .main-content {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .side-menu {
+            width: 250px;
+            flex-shrink: 0;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            align-self: flex-start;
+        }
+
+        .side-menu h3 {
+            margin-top: 0;
+            font-size: 18px;
+            border-bottom: 2px solid #f4f7f6;
+            padding-bottom: 10px;
+        }
+
+        .tab {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 12px 15px;
+            margin-bottom: 5px;
+            border: none;
+            background: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            color: #555;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background-color: #f8f9fa;
+            color: #007bff;
+        }
+
+        .tab.active {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+
+        .gallery-container {
+            flex-grow: 1;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+            position: relative;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card img {
+            width: 100%;
+            height: 220px;
+            object-fit: cover;
+        }
+
+        .card-content {
+            padding: 15px 15px 45px 15px;
+        }
+
+        /* 余白を増やしてボタンと重ならないようにする */
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0 0 10px;
+        }
+
+        .card-category {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-category::before {
+            content: '📁 ';
+            font-size: 12px;
+            margin-right: 5px;
+        }
+
+        .card-date {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .nav {
+            margin-bottom: 20px;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        /* カテゴリー追加用の簡易フォーム */
+        .add-category {
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .add-category input {
+            margin-bottom: 10px;
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/">← 備蓄品管理へ戻る</a>
+        </div>
+        <h1>骨董品ギャラリー</h1>
+
+        <!-- フォーム開閉ボタン -->
+        <button id="toggleFormBtn" class="btn btn-toggle">登録フォームを表示</button>
+
+        <section id="formContainer" class="form-section">
+            <h2 id="formTitle">新規登録</h2>
+            <form id="kottouhinForm" enctype="multipart/form-data">
+                <input type="hidden" id="kottouhinId" name="id">
+                <div id="formFields">
+                    <div class="form-group">
+                        <label for="name">品名</label>
+                        <input type="text" id="name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="categoryId">カテゴリー</label>
+                        <select id="categoryId" name="categoryId">
+                            <option value="">(カテゴリーなし)</option>
+                            <!-- Categories will be loaded here -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="entry_date">登録日</label>
+                        <input type="date" id="entry_date" name="entry_date">
+                    </div>
+                    <div class="form-group">
+                        <label for="photo">写真 (更新時のみ選択、変更しない場合は空のまま)</label>
+                        <input type="file" id="photo" name="photo" accept="image/*">
+                    </div>
+                </div>
+                <div id="formActions" style="
+    display: flex;
+    justify-content: space-between;
+">
+                    <button type="submit" id="submitBtn" class="btn btn-primary">登録する</button>
+                    <button type="button" id="cancelEditBtn" class="btn"
+                        style="display:none; background-color:#ccc;">キャンセル</button>
+                    <div id="categoryAddSection" class="add-category" style="display: inline-block;/* float: right; */">
+                        <!-- カテゴリー追加機能 -->
+                        <label>新規カテゴリー追加</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="newCategoryName" placeholder="カテゴリー名">
+                            <button id="addCategoryBtn" class="btn btn-primary btn-sm">追加</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <div class="main-content">
+            <!-- サイドメニュー (カテゴリータブ) -->
+            <aside class="side-menu">
+                <h3>カテゴリー</h3>
+                <nav id="categoryTabs">
+                    <button class="tab active" data-id="all">すべて表示</button>
+                    <!-- Categories will be loaded here -->
+                </nav>
+            </aside>
+
+            <!-- ギャラリー -->
+            <main class="gallery-container">
+                <div id="gallery" class="gallery">
+                    <!-- Data will be loaded here -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('kottouhinForm');
+        const kottouhinIdInput = document.getElementById('kottouhinId');
+        const nameInput = document.getElementById('name');
+        const dateInput = document.getElementById('entry_date');
+        const formTitle = document.getElementById('formTitle');
+        const submitBtn = document.getElementById('submitBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const categoryAddSection = document.getElementById('categoryAddSection');
+
+        const gallery = document.getElementById('gallery');
+        const categorySelect = document.getElementById('categoryId');
+        const categoryTabs = document.getElementById('categoryTabs');
+        const toggleFormBtn = document.getElementById('toggleFormBtn');
+        const formContainer = document.getElementById('formContainer');
+        const newCategoryNameInput = document.getElementById('newCategoryName');
+        const addCategoryBtn = document.getElementById('addCategoryBtn');
+
+        let allItems = [];
+        let currentCategoryId = 'all';
+
+        // フォームの開閉
+        toggleFormBtn.onclick = () => {
+            if (formContainer.style.display === 'none' || formContainer.style.display === '') {
+                showForm();
+            } else {
+                hideForm();
+            }
+        };
+
+        function showForm() {
+            formContainer.style.display = 'block';
+            toggleFormBtn.textContent = '登録フォームを閉じる';
+        }
+
+        function hideForm() {
+            formContainer.style.display = 'none';
+            toggleFormBtn.textContent = '登録フォームを表示';
+            resetForm();
+        }
+
+        function resetForm() {
+            form.reset();
+            kottouhinIdInput.value = '';
+            dateInput.valueAsDate = new Date();
+            formTitle.textContent = '新規登録';
+            submitBtn.textContent = '登録する';
+            cancelEditBtn.style.display = 'none';
+            categoryAddSection.style.display = 'block';
+        }
+
+        cancelEditBtn.onclick = () => {
+            hideForm();
+        };
+
+        // デフォルトの日付を今日に設定
+        dateInput.valueAsDate = new Date();
+
+        // カテゴリー一覧の取得
+        async function loadCategories(selectedId = null) {
+            try {
+                const response = await fetch('/kottouhin/api/categories');
+                const categories = await response.json();
+
+                // セレクトボックスの更新
+                categorySelect.innerHTML = '<option value="">(カテゴリーなし)</option>' +
+                    categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+                if (selectedId) {
+                    categorySelect.value = selectedId;
+                }
+
+                // タブの更新
+                const tabsHtml = `<button class="tab ${currentCategoryId === 'all' ? 'active' : ''}" data-id="all">すべて表示</button>` +
+                    categories.map(c => `<button class="tab ${currentCategoryId == c.id ? 'active' : ''}" data-id="${c.id}">${c.name}</button>`).join('');
+                categoryTabs.innerHTML = tabsHtml;
+
+                // タブにクリックイベントを再設定
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.onclick = () => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        currentCategoryId = tab.dataset.id;
+                        renderGallery();
+                    };
+                });
+            } catch (err) {
+                console.error('Failed to load categories:', err);
+            }
+        }
+
+        // ギャラリーの表示
+        function renderGallery() {
+            const filteredItems = currentCategoryId === 'all'
+                ? allItems
+                : allItems.filter(item => item.KottouhinCategoryId == currentCategoryId);
+
+            if (filteredItems.length === 0) {
+                gallery.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #999; padding: 40px;">アイテムがありません</p>';
+                return;
+            }
+
+            gallery.innerHTML = filteredItems.map(item => `
+                <div class="card">
+                    <img src="${item.photo || 'https://via.placeholder.com/220?text=No+Image'}" alt="${item.name}">
+                    <div class="card-content">
+                        <div class="card-title">${item.name}</div>
+                        <div class="card-category">${item.KottouhinCategory ? item.KottouhinCategory.name : 'なし'}</div>
+                        <div class="card-date">${item.entry_date}</div>
+                    </div>
+                    <button class="btn btn-edit" onclick="startEdit(${item.id})">編集</button>
+                </div>
+            `).join('');
+        }
+
+        window.startEdit = (id) => {
+            const item = allItems.find(i => i.id === id);
+            if (!item) return;
+
+            kottouhinIdInput.value = item.id;
+            nameInput.value = item.name;
+            categorySelect.value = item.KottouhinCategoryId || '';
+            dateInput.value = item.entry_date;
+
+            formTitle.textContent = '情報を編集';
+            submitBtn.textContent = '更新する';
+            cancelEditBtn.style.display = 'inline-block';
+            //categoryAddSection.style.display = 'none'; // 編集時はカテゴリー追加を隠してスッキリさせる
+
+            showForm();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        async function loadGallery() {
+            try {
+                const response = await fetch('/kottouhin/api/kottouhin');
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                allItems = await response.json();
+                renderGallery();
+            } catch (err) {
+                console.error('Failed to load gallery:', err);
+            }
+        }
+
+        // 新規カテゴリー追加
+        addCategoryBtn.onclick = async () => {
+            const name = newCategoryNameInput.value.trim();
+            if (!name) return;
+
+            try {
+                const response = await fetch('/kottouhin/api/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                if (response.ok) {
+                    const newCategory = await response.json();
+                    newCategoryNameInput.value = '';
+                    await loadCategories(newCategory.id);
+                } else {
+                    const err = await response.json();
+                    alert('カテゴリー追加エラー: ' + (err.error || '不明なエラー'));
+                }
+            } catch (err) {
+                console.error('Category addition error:', err);
+            }
+        };
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/kottouhin/api/kottouhin', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    hideForm();
+                    await loadGallery();
+                } else {
+                    const err = await response.json();
+                    alert('保存エラー: ' + (err.error || '不明なエラー'));
+                }
+            } catch (err) {
+                console.error('Save error:', err);
+                alert('保存に失敗しました');
+            }
+        };
+
+        // 初期化
+        loadCategories();
+        loadGallery();
+    </script>
+</body>
+
+</html>

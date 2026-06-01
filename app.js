@@ -1,19 +1,39 @@
 const express = require('express');
-const vhost = require('vhost');
 const bcrypt = require('bcryptjs');
-const { sequelize, User, Stocktaking } = require('./models');
+const vhost = require('vhost');
+const fs = require('fs');
+const path = require('path');
+const { sequelize, User, Stocktaking, Room, Department, Employee, Reservation } = require('./models');
 
 const bichikuhinkanri = require('./apps/bichikuhinkanri');
+const kottouhin = require('./apps/kottouhin');
+const kikai = require('./apps/kikai');
+const reservations = require('./apps/reservations');
 
-const app = express();
+const soumu = express();
 const PORT = 3000;
 
-app.use(vhost('bichikuhinkanri', bichikuhinkanri));
+// Create upload directory if it doesn't exist
+const uploadDir = path.join(__dirname, 'public/uploads/kottouhin/');
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+soumu.use('/', bichikuhinkanri);
+soumu.use('/kottouhin', kottouhin);
+soumu.use('/reservations', reservations);
+// Static files (for images etc.)
+soumu.use(express.static('public'));
+
+const app = express();
+app.use(vhost('bichikuhinkanri_local', soumu));
+app.use(vhost('kikairollweb_local', kikai));
+app.use(vhost('reservations_local', reservations));
 
 // --- データベース同期とサーバー起動 ---
-sequelize.sync({ alter: true }).then(async () => {
+sequelize.sync({ alter: false }).then(async () => {
     console.log('Database synced');
-    
+
     // テストユーザーがいない場合は作成 (ユーザー名: admin, パスワード: password123)
     const userCount = await User.count();
     if (userCount === 0) {

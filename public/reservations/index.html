@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>会議室予約</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink:       #1a1a18;
+      --ink-light: #6b6b60;
+      --paper:     #f5f3ee;
+      --rule:      #dddad2;
+      --accent:    #2d5fa6;
+      --accent-bg: #dce8f7;
+      --danger:    #b03a2e;
+      --danger-bg: #fdecea;
+      --shadow:    rgba(26,26,24,0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100vh;
+      background-image:
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 23px,
+          var(--rule) 23px,
+          var(--rule) 24px
+        );
+    }
+
+    /* ── Date nav ─────────────────────────────────────── */
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .chevron-btn {
+      width: 2.25rem;
+      height: 2.25rem;
+      border: 1.5px solid var(--rule);
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-light);
+      transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+    .chevron-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(45,95,166,0.12);
+    }
+    .date-display {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.15rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+      min-width: 11rem;
+      text-align: center;
+    }
+
+    /* ── Grid wrapper ─────────────────────────────────── */
+    .grid-outer {
+      overflow-x: auto;
+      border: 1.5px solid var(--rule);
+      border-radius: 10px;
+      background: white;
+      box-shadow: 0 2px 16px var(--shadow);
+    }
+
+    /* columns: room-label + 18 half-hour slots */
+    .res-grid {
+      display: grid;
+      grid-template-columns: 7rem repeat(18, minmax(3.2rem, 1fr));
+      min-width: 40rem;
+    }
+
+    /* ── Header row ───────────────────────────────────── */
+    .grid-header-corner {
+      grid-column: 1;
+      border-bottom: 1.5px solid var(--rule);
+      background: var(--paper);
+    }
+    .time-header {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--ink-light);
+      border-bottom: 1.5px solid var(--rule);
+      border-left: 1px solid var(--rule);
+      padding: 0.4rem 0.25rem 0.4rem 0.35rem;
+      background: var(--paper);
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    /* ── Room label cells ─────────────────────────────── */
+    .room-label {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--ink);
+      padding: 0 0.75rem;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper);
+      user-select: none;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+
+    /* ── Slot cells ───────────────────────────────────── */
+    .slot {
+      border-left: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      height: 3rem;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.08s;
+    }
+    .slot:hover {
+      background: var(--accent-bg);
+    }
+    .slot.half-hour-start {
+      border-left: 1.5px solid #ccc9bf;
+    }
+    .slot.drag-highlight {
+      background: var(--accent-bg) !important;
+    }
+    .slot.drag-invalid {
+      background: var(--danger-bg) !important;
+    }
+
+    /* ── Reservation blocks ───────────────────────────── */
+    .res-block {
+      position: absolute;
+      inset: 3px 2px;
+      background: var(--accent);
+      border-radius: 5px;
+      color: white;
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 2px 6px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      z-index: 1;
+      box-shadow: 0 1px 4px rgba(45,95,166,0.25);
+      transition: filter 0.12s;
+      /* span multiple columns via JS-set CSS variable */
+      width: calc(var(--span-cols) * 100% + calc(var(--span-cols) - 1) * 1px);
+    }
+    .res-block:hover { filter: brightness(1.12); }
+
+    /* last row — no bottom border */
+    .slot:last-of-type, .room-label:last-of-type { border-bottom: none; }
+
+    /* ── Modal backdrop ───────────────────────────────── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(26,26,24,0.35);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+    }
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(26,26,24,0.18);
+      padding: 2rem;
+      width: min(26rem, 92vw);
+      transform: translateY(8px);
+      transition: transform 0.18s;
+    }
+    .modal-backdrop.open .modal { transform: translateY(0); }
+
+    .modal-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .modal-sub {
+      font-size: 0.8rem;
+      color: var(--ink-light);
+      margin-bottom: 1.25rem;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .form-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--ink-light);
+      margin-bottom: 0.3rem;
+      display: block;
+    }
+    .form-select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1.5px solid var(--rule);
+      border-radius: 7px;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 0.875rem;
+      color: var(--ink);
+      background: white;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6b60' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      cursor: pointer;
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .form-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(45,95,166,0.12);
+    }
+    .form-select:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn {
+      padding: 0.55rem 1.25rem;
+      border-radius: 7px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: filter 0.12s, box-shadow 0.12s;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-danger  { background: var(--danger); color: white; }
+    .btn-ghost   {
+      background: transparent;
+      color: var(--ink-light);
+      border: 1.5px solid var(--rule);
+    }
+    .btn-ghost:hover { border-color: var(--ink-light); filter: none; }
+
+    .divider { border: none; border-top: 1.5px solid var(--rule); margin: 1.25rem 0; }
+  </style>
+</head>
+<body class="p-6 md:p-10">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <div class="max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-8">
+      <h1 class="text-xl font-bold tracking-tight" style="color:var(--ink)">会議室予約</h1>
+      <div class="date-nav">
+        <button class="chevron-btn" id="prevDay" title="前日">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="date-display" id="dateDisplay"></span>
+        <button class="chevron-btn" id="nextDay" title="翌日">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Reservation grid ──────────────────────────────── -->
+    <div class="grid-outer">
+      <div class="res-grid" id="resGrid">
+        <!-- injected by JS -->
+      </div>
+    </div>
+
+    <p class="text-xs mt-3" style="color:var(--ink-light)">クリック: 1コマ予約　／　ドラッグ: 複数コマ予約　／　予約済みをクリック: 削除</p>
+  </div>
+
+  <!-- ── Book modal ──────────────────────────────────────── -->
+  <div class="modal-backdrop" id="bookModal">
+    <div class="modal">
+      <div class="modal-title">予約を追加</div>
+      <div class="modal-sub" id="bookModalSub"></div>
+      <hr class="divider" />
+      <div class="mb-4">
+        <label class="form-label">部署</label>
+        <select class="form-select" id="deptSelect">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div class="mb-6">
+        <label class="form-label">予約者</label>
+        <select class="form-select" id="empSelect" disabled>
+          <option value="">部署を先に選択</option>
+        </select>
+      </div>
+      <div class="flex gap-3 justify-end">
+        <button class="btn btn-ghost" id="bookCancel">キャンセル</button>
+        <button class="btn btn-primary" id="bookConfirm">予約する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Delete modal ────────────────────────────────────── -->
+  <div class="modal-backdrop" id="deleteModal">
+    <div class="modal">
+      <div class="modal-title">予約を削除</div>
+      <div class="modal-sub" id="deleteModalSub"></div>
+      <hr class="divider" />
+      <p class="text-sm mb-6" style="color:var(--ink-light)">この予約を削除してもよろしいですか？この操作は元に戻せません。</p>
+      <div class="flex gap-3 justify-end">
+        <button class="btn btn-ghost" id="deleteCancel">キャンセル</button>
+        <button class="btn btn-danger" id="deleteConfirm">削除する</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────
+let ROOMS = [];
+let DEPARTMENTS = [];
+let EMPLOYEES = [];
+
+// slotIndex 0 = 08:00, 17 = 16:30
+const SLOT_COUNT = 18;
+const START_HOUR = 8;
+
+let reservations = [];
+
+// ── Helpers ───────────────────────────────────────────────
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function slotToTime(slot) {
+  const totalMins = START_HOUR * 60 + slot * 30;
+  const h = String(Math.floor(totalMins / 60)).padStart(2, '0');
+  const m = totalMins % 60 === 0 ? '00' : '30';
+  return `${h}:${m}`;
+}
+
+function timeToSlot(timeStr) {
+  // HH:MM or HH:MM:SS
+  const [h, m] = timeStr.split(':').map(Number);
+  const totalMins = h * 60 + m;
+  return (totalMins - START_HOUR * 60) / 30;
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+function shiftDate(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d + days);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function empName(id) {
+  return EMPLOYEES.find(e => e.id === id)?.name ?? '不明';
+}
+
+// ── State ─────────────────────────────────────────────────
+let currentDate = todayStr();
+let dragState = null; // { roomId, startSlot }
+
+// ── API Calls ─────────────────────────────────────────────
+async function fetchMasters() {
+  try {
+    const res = await fetch('api/masters');
+    const data = await res.json();
+    ROOMS = data.rooms;
+    DEPARTMENTS = data.departments;
+    EMPLOYEES = DEPARTMENTS.flatMap(d => d.employees || []);
+    buildGrid();
+  } catch (err) {
+    console.error('Failed to fetch masters:', err);
+  }
+}
+
+async function fetchReservations() {
+  try {
+    const res = await fetch(`/api/reservations?date=${currentDate}`);
+    const data = await res.json();
+    reservations = data.map(r => ({
+      id: r.id,
+      roomId: r.roomId,
+      date: r.date,
+      startSlot: timeToSlot(r.startTime),
+      endSlot: timeToSlot(r.endTime) - 1, // inclusive end slot
+      employeeId: r.reservingEmployeeId,
+      employeeName: r.reservingEmployee?.name
+    }));
+    renderReservations();
+  } catch (err) {
+    console.error('Failed to fetch reservations:', err);
+  }
+}
+
+// ── Grid build ────────────────────────────────────────────
+function buildGrid() {
+  const grid = document.getElementById('resGrid');
+  grid.innerHTML = '';
+
+  // Corner
+  const corner = document.createElement('div');
+  corner.className = 'grid-header-corner';
+  grid.appendChild(corner);
+
+  // Time headers
+  for (let s = 0; s < SLOT_COUNT; s++) {
+    const th = document.createElement('div');
+    th.className = 'time-header';
+    th.textContent = slotToTime(s);
+    grid.appendChild(th);
+  }
+
+  // Rows
+  ROOMS.forEach(room => {
+    // Room label
+    const label = document.createElement('div');
+    label.className = 'room-label';
+    label.textContent = room.name;
+    grid.appendChild(label);
+
+    // Slots
+    for (let s = 0; s < SLOT_COUNT; s++) {
+      const cell = document.createElement('div');
+      cell.className = 'slot' + (s % 2 === 0 ? ' half-hour-start' : '');
+      cell.dataset.room = room.id;
+      cell.dataset.slot = s;
+
+      // drag events
+      cell.addEventListener('mousedown', onSlotMouseDown);
+      cell.addEventListener('mouseenter', onSlotMouseEnter);
+      cell.addEventListener('mouseup', onSlotMouseUp);
+      cell.addEventListener('click', onSlotClick);
+
+      grid.appendChild(cell);
+    }
+  });
+
+  fetchReservations();
+}
+
+function renderReservations() {
+  // Clear existing blocks
+  document.querySelectorAll('.res-block').forEach(b => b.remove());
+
+  reservations.forEach(res => {
+    const startCell = document.querySelector(`.slot[data-room="${res.roomId}"][data-slot="${res.startSlot}"]`);
+    if (!startCell) return;
+
+    const span = res.endSlot - res.startSlot + 1;
+    const block = document.createElement('div');
+    block.className = 'res-block';
+    block.style.setProperty('--span-cols', span);
+    block.textContent = res.employeeName || empName(res.employeeId);
+    block.title = `${res.employeeName || empName(res.employeeId)}　${slotToTime(res.startSlot)}–${slotToTime(res.endSlot + 1)}`;
+    block.dataset.resId = res.id;
+    block.addEventListener('click', e => { e.stopPropagation(); openDeleteModal(res.id); });
+    startCell.appendChild(block);
+  });
+}
+
+// ── Date nav ──────────────────────────────────────────────
+function updateDateDisplay() {
+  document.getElementById('dateDisplay').textContent = formatDate(currentDate);
+}
+
+document.getElementById('prevDay').addEventListener('click', () => {
+  currentDate = shiftDate(currentDate, -1);
+  updateDateDisplay();
+  fetchReservations();
+});
+document.getElementById('nextDay').addEventListener('click', () => {
+  currentDate = shiftDate(currentDate, 1);
+  updateDateDisplay();
+  fetchReservations();
+});
+
+// ── Drag / Click logic ────────────────────────────────────
+function onSlotMouseDown(e) {
+  if (e.button !== 0) return;
+  const slot = parseInt(e.currentTarget.dataset.slot);
+  const roomId = parseInt(e.currentTarget.dataset.room);
+  dragState = { roomId, startSlot: slot, endSlot: slot, active: false };
+  e.preventDefault();
+}
+
+function onSlotMouseEnter(e) {
+  if (!dragState) return;
+  const slot = parseInt(e.currentTarget.dataset.slot);
+  const roomId = parseInt(e.currentTarget.dataset.room);
+  if (roomId !== dragState.roomId) return;
+  dragState.endSlot = slot;
+  dragState.active = true;
+  highlightDrag();
+}
+
+function onSlotMouseUp(e) {
+  if (!dragState) return;
+  const slot = parseInt(e.currentTarget.dataset.slot);
+  const roomId = parseInt(e.currentTarget.dataset.room);
+
+  if (dragState.active && roomId === dragState.roomId) {
+    const start = Math.min(dragState.startSlot, dragState.endSlot);
+    const end   = Math.max(dragState.startSlot, dragState.endSlot);
+    clearDragHighlight();
+    dragState = null;
+    openBookModal(roomId, start, end);
+  } else {
+    clearDragHighlight();
+    dragState = null;
+  }
+}
+
+// single-cell click (not a drag)
+function onSlotClick(e) {
+  if (dragState !== null) return; // handled by mouseup
+  const slot   = parseInt(e.currentTarget.dataset.slot);
+  const roomId = parseInt(e.currentTarget.dataset.room);
+  openBookModal(roomId, slot, slot);
+}
+
+document.addEventListener('mouseup', () => {
+  if (dragState) {
+    clearDragHighlight();
+    dragState = null;
+  }
+});
+
+function highlightDrag() {
+  clearDragHighlight();
+  if (!dragState) return;
+  const start = Math.min(dragState.startSlot, dragState.endSlot);
+  const end   = Math.max(dragState.startSlot, dragState.endSlot);
+  for (let s = start; s <= end; s++) {
+    const cell = document.querySelector(`.slot[data-room="${dragState.roomId}"][data-slot="${s}"]`);
+    if (cell) cell.classList.add('drag-highlight');
+  }
+}
+
+function clearDragHighlight() {
+  document.querySelectorAll('.drag-highlight').forEach(c => c.classList.remove('drag-highlight'));
+}
+
+// ── Book modal ────────────────────────────────────────────
+let pendingBooking = null;
+
+function openBookModal(roomId, startSlot, endSlot) {
+  const room = ROOMS.find(r => r.id === roomId);
+  pendingBooking = { roomId, startSlot, endSlot };
+
+  const timeRange = startSlot === endSlot
+    ? `${slotToTime(startSlot)}–${slotToTime(startSlot + 1)}`
+    : `${slotToTime(startSlot)}–${slotToTime(endSlot + 1)}`;
+
+  document.getElementById('bookModalSub').textContent =
+    `${room.name}　${formatDate(currentDate)}　${timeRange}`;
+
+  // Populate departments
+  const deptSel = document.getElementById('deptSelect');
+  deptSel.innerHTML = '<option value="">選択してください</option>';
+  DEPARTMENTS.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.name;
+    deptSel.appendChild(opt);
+  });
+
+  const empSel = document.getElementById('empSelect');
+  empSel.innerHTML = '<option value="">部署を先に選択</option>';
+  empSel.disabled = true;
+
+  openModal('bookModal');
+}
+
+document.getElementById('deptSelect').addEventListener('change', function () {
+  const deptId = parseInt(this.value);
+  const empSel = document.getElementById('empSelect');
+  empSel.innerHTML = '<option value="">選択してください</option>';
+  if (!deptId) { empSel.disabled = true; return; }
+
+  const dept = DEPARTMENTS.find(d => d.id === deptId);
+  (dept.employees || []).forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e.id;
+    opt.textContent = e.name;
+    empSel.appendChild(opt);
+  });
+  empSel.disabled = false;
+});
+
+document.getElementById('bookConfirm').addEventListener('click', async () => {
+  const empId = parseInt(document.getElementById('empSelect').value);
+  if (!empId) { document.getElementById('empSelect').focus(); return; }
+
+  const payload = {
+    roomId: pendingBooking.roomId,
+    date: currentDate,
+    startTime: slotToTime(pendingBooking.startSlot),
+    endTime: slotToTime(pendingBooking.endSlot + 1),
+    reservingEmployeeId: empId,
+    registeredByUserId: empId, // Temporary: using same employee for registration
+  };
+
+  try {
+    const res = await fetch('/api/reservations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      fetchReservations();
+      closeModal('bookModal');
+      pendingBooking = null;
+    }
+  } catch (err) {
+    console.error('Failed to create reservation:', err);
+  }
+});
+
+document.getElementById('bookCancel').addEventListener('click', () => {
+  closeModal('bookModal');
+  pendingBooking = null;
+});
+
+// ── Delete modal ──────────────────────────────────────────
+let pendingDeleteId = null;
+
+function openDeleteModal(resId) {
+  const res = reservations.find(r => r.id === resId);
+  if (!res) return;
+  pendingDeleteId = resId;
+
+  const room = ROOMS.find(r => r.id === res.roomId);
+  document.getElementById('deleteModalSub').textContent =
+    `${room.name}　${slotToTime(res.startSlot)}–${slotToTime(res.endSlot + 1)}　${res.employeeName || empName(res.employeeId)}`;
+
+  openModal('deleteModal');
+}
+
+document.getElementById('deleteConfirm').addEventListener('click', async () => {
+  try {
+    const res = await fetch(`/api/reservations/${pendingDeleteId}`, {
+      method: 'DELETE'
+    });
+    if (res.ok) {
+      fetchReservations();
+      closeModal('deleteModal');
+      pendingDeleteId = null;
+    }
+  } catch (err) {
+    console.error('Failed to delete reservation:', err);
+  }
+});
+
+document.getElementById('deleteCancel').addEventListener('click', () => {
+  closeModal('deleteModal');
+  pendingDeleteId = null;
+});
+
+// ── Modal helpers ─────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// Click backdrop to close
+['bookModal', 'deleteModal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target === e.currentTarget) {
+      closeModal(id);
+      pendingBooking = null;
+      pendingDeleteId = null;
+    }
+  });
+});
+
+// ── Init ──────────────────────────────────────────────────
+updateDateDisplay();
+fetchMasters();
+</script>
+</body>
+</html>

@@ -28,3 +28,16 @@ pids
 
 # Optional
 .DS_Store
+
+#images
+*.JPG
+*.PNG
+*.GIF
+*.JPEG
+*.SVG
+*.BMP
+*.TIFF
+*.WEBP
+*.ICO
+*.HEIC
+*.RAW
