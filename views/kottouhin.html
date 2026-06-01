@@ -318,6 +318,29 @@
     </div>
 
     <script>
+        async function apiFetch(url, options = {}) {
+            let response = await fetch(url, options);
+            if (response.status === 401) {
+                if (!window.refreshPromise) {
+                    window.refreshPromise = fetch('/api/refresh', { method: 'POST' }).then(res => {
+                        window.refreshPromise = null;
+                        return res.ok;
+                    });
+                }
+                const isRefreshSuccess = await window.refreshPromise;
+                if (isRefreshSuccess) {
+                    response = await fetch(url, options);
+                } else {
+                    window.location.href = '/login';
+                    throw new Error('Unauthorized');
+                }
+            }
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+            return response;
+        }
+
         const form = document.getElementById('kottouhinForm');
         const kottouhinIdInput = document.getElementById('kottouhinId');
         const nameInput = document.getElementById('name');
@@ -378,7 +401,7 @@
         // カテゴリー一覧の取得
         async function loadCategories(selectedId = null) {
             try {
-                const response = await fetch('/kottouhin/api/categories');
+                const response = await apiFetch('/kottouhin/api/categories');
                 const categories = await response.json();
 
                 // セレクトボックスの更新
@@ -452,11 +475,7 @@
 
         async function loadGallery() {
             try {
-                const response = await fetch('/kottouhin/api/kottouhin');
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
-                }
+                const response = await apiFetch('/kottouhin/api/kottouhin');
                 allItems = await response.json();
                 renderGallery();
             } catch (err) {
@@ -470,7 +489,7 @@
             if (!name) return;
 
             try {
-                const response = await fetch('/kottouhin/api/categories', {
+                const response = await apiFetch('/kottouhin/api/categories', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name })
@@ -480,31 +499,30 @@
                     const newCategory = await response.json();
                     newCategoryNameInput.value = '';
                     await loadCategories(newCategory.id);
-                } else {
-                    const err = await response.json();
-                    alert('カテゴリー追加エラー: ' + (err.error || '不明なエラー'));
                 }
             } catch (err) {
                 console.error('Category addition error:', err);
+                alert('カテゴリー追加に失敗しました');
             }
         };
 
         form.onsubmit = async (e) => {
             e.preventDefault();
             const formData = new FormData(form);
+            const id = kottouhinIdInput.value;
+
+            const url = id ? `/kottouhin/api/kottouhin/${id}` : '/kottouhin/api/kottouhin';
+            const method = id ? 'PUT' : 'POST';
 
             try {
-                const response = await fetch('/kottouhin/api/kottouhin', {
-                    method: 'POST',
+                const response = await apiFetch(url, {
+                    method: method,
                     body: formData
                 });
 
                 if (response.ok) {
                     hideForm();
                     await loadGallery();
-                } else {
-                    const err = await response.json();
-                    alert('保存エラー: ' + (err.error || '不明なエラー'));
                 }
             } catch (err) {
                 console.error('Save error:', err);

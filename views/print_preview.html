@@ -237,15 +237,25 @@
                 async apiFetch(url, options = {}) {
                     let response = await fetch(url, options);
                     if (response.status === 401) {
-                        const refreshRes = await fetch('/api/refresh', { method: 'POST' });
-                        if (refreshRes.ok) {
-                            return fetch(url, options);
+                        if (!window.refreshPromise) {
+                            window.refreshPromise = fetch('/api/refresh', { method: 'POST' }).then(res => {
+                                window.refreshPromise = null;
+                                return res.ok;
+                            });
+                        }
+                        const isRefreshSuccess = await window.refreshPromise;
+                        if (isRefreshSuccess) {
+                            response = await fetch(url, options);
                         } else {
                             window.location.href = '/login';
+                            throw new Error('Unauthorized');
                         }
                     }
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status}`);
+                    }
                     return response;
-                }
+                },
             }
         }
     </script>

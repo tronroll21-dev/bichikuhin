@@ -112,16 +112,28 @@ app.post('/api/register', async (req, res) => {
 });
 
 // 4. トークンリフレッシュAPI
-app.post('/api/refresh', (req, res) => {
+app.post('/api/refresh', async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) return res.sendStatus(401);
 
-    jwt.verify(refreshToken, REFRESH_SECRET, (err, user) => {
+    jwt.verify(refreshToken, REFRESH_SECRET, async (err, decoded) => {
         if (err) return res.sendStatus(403);
         
-        const accessToken = jwt.sign({ id: user.id }, ACCESS_SECRET, { expiresIn: '5m' });
-        res.cookie('accessToken', accessToken, { httpOnly: true });
-        res.json({ success: true });
+        try {
+            const user = await User.findByPk(decoded.id);
+            if (!user) return res.sendStatus(403);
+
+            const accessToken = jwt.sign(
+                { id: user.id, name: user.name, role: user.role },
+                ACCESS_SECRET,
+                { expiresIn: '5m' }
+            );
+            res.cookie('accessToken', accessToken, { httpOnly: true });
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Refresh error:', error);
+            res.sendStatus(500);
+        }
     });
 });
 
